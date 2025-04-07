@@ -1,5 +1,7 @@
 package sdk
 
+import "os"
+
 // Flag represents a single feature flag definition
 type Flag struct {
 	Enabled *bool  `json:"enabled,omitempty"` // Static fallback/default
@@ -49,7 +51,16 @@ func ruleMatches(conditions map[string]string, ctx EvalContext, rule Rule) bool 
 		}
 		seedVal, ok := ctx[seedKey]
 		if !ok {
-			return false
+			// Fallback: if seed is missing, and we're asking for hostname, try env
+			if seedKey == "HOSTNAME" {
+				if val, err := os.Hostname(); err == nil && val != "" {
+					seedVal = val
+				} else {
+					return false // No fallback available
+				}
+			} else {
+				return false
+			}
 		}
 		percent := hashToPercent(seedVal)
 		return percent < *rule.Percent

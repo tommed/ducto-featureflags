@@ -100,7 +100,7 @@ func (s *WatchingStore) reload() {
 func (s *WatchingStore) IsEnabled(key string) bool {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
-	return s.store.IsEnabled(key)
+	return s.store.IsEnabled(key, EvalContext{})
 }
 
 func (s *WatchingStore) AllFlags() map[string]Flag {

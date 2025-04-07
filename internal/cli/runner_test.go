@@ -104,3 +104,30 @@ func TestRun_UnknownFlag(t *testing.T) {
 	assert.Equal(t, 1, code)
 	assert.Contains(t, stderr.String(), "flag provided but not defined")
 }
+
+func TestRun_WithContextEvaluation(t *testing.T) {
+	flags := `{
+		"flags": {
+			"canary_mode": {
+				"rules": [
+					{ "if": { "user_group": "beta" }, "value": true }
+				],
+				"enabled": false
+			}
+		}
+	}`
+
+	path := writeTempFlags(t, flags)
+
+	stdout := new(bytes.Buffer)
+	stderr := new(bytes.Buffer)
+
+	code := Run([]string{
+		"-file", path,
+		"-key", "canary_mode",
+		"--ctx", "user_group=beta",
+	}, stdout, stderr)
+
+	assert.Equal(t, 0, code)
+	assert.Contains(t, stdout.String(), `"canary_mode" is true`)
+}

@@ -17,9 +17,12 @@ func Run(args []string, stdout, stderr io.Writer) int {
 	var file string
 	var key string
 	var printAll bool
+	var ctxFlags arrayFlags
+
 	fs.StringVar(&file, "file", "flags.json", "Path to feature flag definition file")
 	fs.StringVar(&key, "key", "", "Feature flag key to check")
 	fs.BoolVar(&printAll, "list", false, "Print all loaded flags")
+	fs.Var(&ctxFlags, "ctx", "Context key=value pair (can be used multiple times)")
 	if err := fs.Parse(args); err != nil {
 		fmt.Fprintf(stderr, "failed to parse args: %v\n", err)
 		return 1
@@ -46,7 +49,8 @@ func Run(args []string, stdout, stderr io.Writer) int {
 		return 0
 	}
 
-	result := store.IsEnabled(key)
+	ctx := parseContext(ctxFlags)
+	result := store.IsEnabled(key, ctx)
 	fmt.Fprintf(stdout, "Flag %q is %v\n", key, result)
 	return 0
 }

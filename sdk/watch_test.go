@@ -49,7 +49,7 @@ func TestWatchingStore_ReloadsOnChange(t *testing.T) {
 	// Wait for watcher to be fully registered
 	time.Sleep(200 * time.Millisecond)
 
-	assert.False(t, store.IsEnabled("new_ui"))
+	assert.False(t, store.IsEnabled("new_ui", EvalContext{}))
 
 	// Modify file to flip flag to true
 	writeTestFlags(t, file, `{
@@ -71,7 +71,7 @@ func TestWatchingStore_ReloadsOnChange(t *testing.T) {
 		}
 	}
 
-	assert.True(t, store.IsEnabled("new_ui"))
+	assert.True(t, store.IsEnabled("new_ui", EvalContext{}))
 }
 
 func TestWatchingStore_HandlesBadFileGracefully(t *testing.T) {

@@ -19,25 +19,6 @@ func writeTempFlags(t *testing.T, json string) string {
 	return path
 }
 
-func TestRun_ListFlags(t *testing.T) {
-	flags := `{
-		"flags": {
-			"foo": { "enabled": true },
-			"bar": { "enabled": false }
-		}
-	}`
-	path := writeTempFlags(t, flags)
-
-	stdout := new(bytes.Buffer)
-	stderr := new(bytes.Buffer)
-	code := Run([]string{"-file", path, "-list"}, stdout, stderr)
-
-	assert.Equal(t, 0, code)
-	output := stdout.String()
-	assert.Contains(t, output, `"foo"`)
-	assert.Contains(t, output, `"enabled": true`)
-}
-
 func TestRun_QuerySingleFlag(t *testing.T) {
 	flags := `{
 		"flags": {

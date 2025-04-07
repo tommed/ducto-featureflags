@@ -16,7 +16,7 @@ func TestNewStoreFromBytes(t *testing.T) {
 		}
 	}`)
 
-	store, err := NewStoreFromBytes(input)
+	store, err := NewStoreFromBytesWithFormat(input, "json")
 	assert.NoError(t, err)
 	assert.NotNil(t, store)
 
@@ -28,7 +28,7 @@ func TestNewStoreFromBytes(t *testing.T) {
 
 func TestNewStoreFromBytes_Invalid(t *testing.T) {
 	bad := []byte(`{ "flags": "not-an-object" }`)
-	_, err := NewStoreFromBytes(bad)
+	_, err := NewStoreFromBytesWithFormat(bad, "json")
 	assert.Error(t, err)
 }
 
@@ -54,12 +54,12 @@ func TestNewStoreFromFile_BadFile(t *testing.T) {
 }
 
 func TestAllFlags(t *testing.T) {
-	store, err := NewStoreFromBytes([]byte(`{
+	store, err := NewStoreFromBytesWithFormat([]byte(`{
 		"flags": {
 			"x": { "enabled": true },
 			"y": { "enabled": false }
 		}
-	}`))
+	}`), "json")
 	require.NoError(t, err)
 
 	flags := store.AllFlags()

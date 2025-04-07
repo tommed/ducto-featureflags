@@ -67,6 +67,8 @@ To make this more dynamic, you can add rules based on an `EvalContext`:
 }
 ```
 
+You can also make use of YAML files, like this [example here](./examples/with_rules.yaml).
+
 ---
 ## 🧑‍💻 Usage (SDK)
 
@@ -98,6 +100,7 @@ ducto-flags -file flags.json -list
 ---
 ## 🛠️ Planned Backends
 - [x] JSON file
+- [x] YAML file
 - [ ] HTTP endpoint
 - [ ] Redis
 - [ ] Google Firestore

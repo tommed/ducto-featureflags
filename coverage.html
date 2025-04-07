@@ -61,6 +61,8 @@
 				
 				<option value="file2">github.com/tommed/ducto-featureflags/sdk/flags.go (100.0%)</option>
 				
+				<option value="file3">github.com/tommed/ducto-featureflags/sdk/watch.go (78.3%)</option>
+				
 				</select>
 			</div>
 			<div id="legend">
@@ -175,34 +177,160 @@ type Store struct {
 }
 
 // NewStoreFromFile loads flags from a JSON file into memory
-func NewStoreFromFile(path string) (*Store, error) <span class="cov9" title="5">{
+func NewStoreFromFile(path string) (*Store, error) <span class="cov9" title="9">{
         data, err := os.ReadFile(path)
-        if err != nil </span><span class="cov4" title="2">{
+        if err != nil </span><span class="cov3" title="2">{
                 return nil, fmt.Errorf("read flag file: %w", err)
         }</span>
-        <span class="cov6" title="3">return NewStoreFromBytes(data)</span>
+        <span class="cov8" title="7">return NewStoreFromBytes(data)</span>
 }
 
 // NewStoreFromBytes allows loading from embedded JSON or remote fetch
-func NewStoreFromBytes(data []byte) (*Store, error) <span class="cov10" title="6">{
+func NewStoreFromBytes(data []byte) (*Store, error) <span class="cov10" title="10">{
         var parsed struct {
                 Flags map[string]Flag `json:"flags"`
         }
-        if err := json.Unmarshal(data, &amp;parsed); err != nil </span><span class="cov1" title="1">{
+        if err := json.Unmarshal(data, &amp;parsed); err != nil </span><span class="cov3" title="2">{
                 return nil, fmt.Errorf("parse flag JSON: %w", err)
         }</span>
-        <span class="cov9" title="5">return &amp;Store{flags: parsed.Flags}, nil</span>
+        <span class="cov9" title="8">return &amp;Store{flags: parsed.Flags}, nil</span>
 }
 
 // IsEnabled returns true if the flag is defined and enabled
-func (s *Store) IsEnabled(key string) bool <span class="cov9" title="5">{
+func (s *Store) IsEnabled(key string) bool <span class="cov8" title="7">{
         flag, ok := s.flags[key]
         return ok &amp;&amp; flag.Enabled
 }</span>
 
 // AllFlags returns the raw flag map
-func (s *Store) AllFlags() map[string]Flag <span class="cov4" title="2">{
+func (s *Store) AllFlags() map[string]Flag <span class="cov3" title="2">{
         return s.flags
+}</span>
+</pre>
+		
+		<pre class="file" id="file3" style="display: none">package sdk
+
+import (
+        "fmt"
+        "path/filepath"
+        "sync"
+        "time"
+
+        "github.com/fsnotify/fsnotify"
+)
+
+// WatchingStore wraps Store and reloads it when the underlying file changes.
+type WatchingStore struct {
+        mu     sync.RWMutex
+        store  *Store
+        path   string
+        events chan struct{}
+        errors chan error
+        done   chan struct{}
+}
+
+// NewWatchingStore creates a WatchingStore that watches the given file.
+func NewWatchingStore(path string) (*WatchingStore, error) <span class="cov3" title="2">{
+        absPath, err := filepath.Abs(path)
+        if err != nil </span><span class="cov0" title="0">{
+                return nil, err
+        }</span>
+        <span class="cov3" title="2">s := &amp;WatchingStore{
+                path:   absPath,
+                events: make(chan struct{}, 1),
+                errors: make(chan error, 1),
+                done:   make(chan struct{}),
+        }
+
+        store, err := NewStoreFromFile(absPath)
+        if err != nil </span><span class="cov0" title="0">{
+                return nil, err
+        }</span>
+        <span class="cov3" title="2">s.store = store
+
+        go s.watch()
+        return s, nil</span>
+}
+
+func (s *WatchingStore) watch() <span class="cov3" title="2">{
+        watcher, err := fsnotify.NewWatcher()
+        if err != nil </span><span class="cov0" title="0">{
+                s.errors &lt;- fmt.Errorf("watcher init failed: %w", err)
+                return
+        }</span>
+        <span class="cov3" title="2">defer watcher.Close()
+
+        dir := s.watchDir()
+        if err := watcher.Add(dir); err != nil </span><span class="cov0" title="0">{
+                s.errors &lt;- fmt.Errorf("watch add failed: %w", err)
+                return
+        }</span>
+
+        <span class="cov3" title="2">for </span><span class="cov10" title="10">{
+                select </span>{
+                case &lt;-s.done:<span class="cov3" title="2">
+                        return</span>
+                case evt := &lt;-watcher.Events:<span class="cov9" title="8">
+                        evtPath := filepath.Clean(evt.Name)
+                        watchPath := filepath.Clean(s.path)
+
+                        if evtPath == watchPath &amp;&amp;
+                                evt.Op&amp;(fsnotify.Write|fsnotify.Create|fsnotify.Rename) != 0 </span><span class="cov3" title="2">{
+                                s.reload()
+                        }</span>
+                case err := &lt;-watcher.Errors:<span class="cov0" title="0">
+                        s.errors &lt;- err</span>
+                }
+        }
+}
+
+func (s *WatchingStore) watchDir() string <span class="cov3" title="2">{
+        return filepath.Dir(s.path)
+}</span>
+
+func (s *WatchingStore) reload() <span class="cov3" title="2">{
+        time.Sleep(50 * time.Millisecond) // debounce file locks
+        store, err := NewStoreFromFile(s.path)
+        if err != nil </span><span class="cov1" title="1">{
+                s.errors &lt;- fmt.Errorf("reload failed: %w", err)
+                return
+        }</span>
+
+        <span class="cov1" title="1">s.mu.Lock()
+        s.store = store
+        s.mu.Unlock()
+
+        select </span>{
+        case s.events &lt;- struct{}{}:<span class="cov1" title="1"></span>
+        default:<span class="cov0" title="0"></span>
+        }
+}
+
+// IsEnabled implements the Store interface.
+func (s *WatchingStore) IsEnabled(key string) bool <span class="cov3" title="2">{
+        s.mu.RLock()
+        defer s.mu.RUnlock()
+        return s.store.IsEnabled(key)
+}</span>
+
+func (s *WatchingStore) AllFlags() map[string]Flag <span class="cov0" title="0">{
+        s.mu.RLock()
+        defer s.mu.RUnlock()
+        return s.store.AllFlags()
+}</span>
+
+func (s *WatchingStore) Close() <span class="cov3" title="2">{
+        close(s.done)
+}</span>
+
+// Events exposes reload notifications (optional).
+func (s *WatchingStore) Events() &lt;-chan struct{} <span class="cov1" title="1">{
+        return s.events
+}</span>
+
+// Errors exposes watcher errors (optional).
+func (s *WatchingStore) Errors() &lt;-chan error <span class="cov1" title="1">{
+        return s.errors
 }</span>
 </pre>
 		

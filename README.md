@@ -101,7 +101,7 @@ ducto-flags -file flags.json -list
 ## 🛠️ Planned Backends
 - [x] JSON file
 - [x] YAML file
-- [ ] HTTP endpoint
+- [x] HTTP endpoint
 - [ ] Redis
 - [ ] Google Firestore
 - [ ] Env var overrides

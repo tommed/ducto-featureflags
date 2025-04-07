@@ -341,7 +341,7 @@ func (f Flag) Evaluate(ctx EvalContext) bool <span class="cov10" title="1025">{
 }
 
 func ruleMatches(conditions map[string]string, ctx EvalContext, rule Rule) bool <span class="cov9" title="1018">{
-        for k, v := range conditions </span><span class="cov4" title="19">{
+        for k, v := range conditions </span><span class="cov4" title="18">{
                 if ctx[k] != v </span><span class="cov3" title="9">{
                         return false
                 }</span>

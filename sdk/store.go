@@ -4,6 +4,10 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"path/filepath"
+	"strings"
+
+	"gopkg.in/yaml.v3"
 )
 
 // Store holds the loaded feature flags
@@ -17,16 +21,33 @@ func NewStoreFromFile(path string) (*Store, error) {
 	if err != nil {
 		return nil, fmt.Errorf("read flag file: %w", err)
 	}
-	return NewStoreFromBytes(data)
+	return NewStoreFromBytesWithFormat(data, detectFormat(path))
 }
 
-// NewStoreFromBytes allows loading from embedded JSON or remote fetch
-func NewStoreFromBytes(data []byte) (*Store, error) {
+func detectFormat(path string) string {
+	ext := strings.ToLower(filepath.Ext(path))
+	switch ext {
+	case ".yaml", ".yml":
+		return "yaml"
+	default:
+		return "json"
+	}
+}
+
+// NewStoreFromBytesWithFormat allows loading from embedded YAML or JSON or remote fetch
+func NewStoreFromBytesWithFormat(data []byte, format string) (*Store, error) {
 	var parsed struct {
 		Flags map[string]Flag `json:"flags"`
 	}
-	if err := json.Unmarshal(data, &parsed); err != nil {
-		return nil, fmt.Errorf("parse flag JSON: %w", err)
+	switch format {
+	case "yaml":
+		if err := yaml.Unmarshal(data, &parsed); err != nil {
+			return nil, fmt.Errorf("parse YAML: %w", err)
+		}
+	default:
+		if err := json.Unmarshal(data, &parsed); err != nil {
+			return nil, fmt.Errorf("parse JSON: %w", err)
+		}
 	}
 	return &Store{flags: parsed.Flags}, nil
 }

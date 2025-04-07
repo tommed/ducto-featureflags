@@ -1,10 +1,41 @@
 package sdk
 
 import (
+	"path/filepath"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 )
+
+func TestYAMLFlagFile_EvaluatesCorrectly(t *testing.T) {
+	path := filepath.Join("..", "examples", "with_rules.yaml")
+
+	store, err := NewStoreFromFile(path)
+	assert.NoError(t, err)
+
+	// Matching rule
+	result := store.IsEnabled("new_ui", EvalContext{
+		"env":   "prod",
+		"group": "beta",
+	})
+	assert.True(t, result)
+
+	// Second rule match
+	result = store.IsEnabled("new_ui", EvalContext{
+		"env": "prod",
+	})
+	assert.False(t, result)
+
+	// No rule match, fallback
+	result = store.IsEnabled("new_ui", EvalContext{
+		"env": "dev",
+	})
+	assert.True(t, result)
+
+	// Missing flag
+	result = store.IsEnabled("not_there", EvalContext{})
+	assert.False(t, result)
+}
 
 func TestFlagEvaluation_StaticOnly(t *testing.T) {
 	f := Flag{Enabled: boolPtr(true)}
@@ -29,7 +60,7 @@ func TestFlagEvaluation_WithRules(t *testing.T) {
 }
 
 func TestStoreEvaluate(t *testing.T) {
-	store, err := NewStoreFromBytes([]byte(`{
+	store, err := NewStoreFromBytesWithFormat([]byte(`{
 		"flags": {
 			"new_ui": {
 				"rules": [
@@ -38,7 +69,7 @@ func TestStoreEvaluate(t *testing.T) {
 				"enabled": false
 			}
 		}
-	}`))
+	}`), "json")
 	assert.NoError(t, err)
 
 	assert.True(t, store.Evaluate("new_ui", EvalContext{"env": "prod"}))

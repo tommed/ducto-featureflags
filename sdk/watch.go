@@ -97,10 +97,10 @@ func (s *WatchingStore) reload() {
 }
 
 // IsEnabled implements the Store interface.
-func (s *WatchingStore) IsEnabled(key string) bool {
+func (s *WatchingStore) IsEnabled(key string, ctx EvalContext) bool {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
-	return s.store.IsEnabled(key, EvalContext{})
+	return s.store.IsEnabled(key, ctx)
 }
 
 func (s *WatchingStore) AllFlags() map[string]Flag {

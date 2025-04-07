@@ -1,0 +1,59 @@
+name: CI
+
+on:
+  push:
+    branches:
+    - 'main'
+    - 'develop'
+    - 'feature/**'
+  pull_request:
+    branches:
+    - 'main'
+    - 'develop'
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: '1.24'
+
+      - name: Install Linter
+        run: make lint-install
+
+      - name: Verify Go modules
+        run: go mod tidy && git diff --exit-code
+
+      - name: Makefile CI
+        run: make ci
+
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v4
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: ./coverage.out
+          flags: unittests
+          name: codecov-coverage
+          fail_ci_if_error: true
+
+      - name: Upload Coverage as Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report
+          path: coverage.out
+
+      - name: Deploy Coverage HTML to GitHub Pages
+        uses: peaceiris/actions-gh-pages@v3
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: .
+          publish_branch: gh-pages
+          allow_empty_commit: false

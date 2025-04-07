@@ -95,6 +95,9 @@ ducto-flags -file flags.json -key new_ui -ctx env=prod -ctx region=EU
 
 # Print all flags
 ducto-flags -file flags.json -list
+
+# Host a flags server (optional auth token)
+ducto-flags serve -file flags.json [-token secret-123]
 ```
 
 ---

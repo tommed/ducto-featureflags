@@ -14,6 +14,9 @@ import (
 )
 
 func TestRunRoot_Serve_E2E(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping e2e tests in short mode")
+	}
 	dir := t.TempDir()
 	file := filepath.Join(dir, "flags.json")
 

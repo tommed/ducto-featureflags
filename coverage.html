@@ -65,7 +65,7 @@
 				
 				<option value="file4">github.com/tommed/ducto-featureflags/internal/cli/serve.go (79.5%)</option>
 				
-				<option value="file5">github.com/tommed/ducto-featureflags/sdk/flags.go (85.7%)</option>
+				<option value="file5">github.com/tommed/ducto-featureflags/sdk/flags.go (84.0%)</option>
 				
 				<option value="file6">github.com/tommed/ducto-featureflags/sdk/flags_http.go (75.0%)</option>
 				
@@ -306,6 +306,8 @@ func Serve(args []string, stdout, stderr io.Writer) int <span class="cov6" title
 		
 		<pre class="file" id="file5" style="display: none">package sdk
 
+import "os"
+
 // Flag represents a single feature flag definition
 type Flag struct {
         Enabled *bool  `json:"enabled,omitempty"` // Static fallback/default
@@ -324,10 +326,10 @@ type Rule struct {
 type EvalContext map[string]string
 
 // Evaluate performs rule-based or fallback evaluation
-func (f Flag) Evaluate(ctx EvalContext) bool <span class="cov10" title="1024">{
+func (f Flag) Evaluate(ctx EvalContext) bool <span class="cov10" title="1025">{
         // Check rules first
-        for _, rule := range f.Rules </span><span class="cov9" title="1017">{
-                if ruleMatches(rule.If, ctx, rule) </span><span class="cov7" title="110">{
+        for _, rule := range f.Rules </span><span class="cov9" title="1018">{
+                if ruleMatches(rule.If, ctx, rule) </span><span class="cov7" title="111">{
                         return rule.Value
                 }</span>
         }
@@ -338,26 +340,35 @@ func (f Flag) Evaluate(ctx EvalContext) bool <span class="cov10" title="1024">{
         <span class="cov1" title="2">return false</span>
 }
 
-func ruleMatches(conditions map[string]string, ctx EvalContext, rule Rule) bool <span class="cov9" title="1017">{
+func ruleMatches(conditions map[string]string, ctx EvalContext, rule Rule) bool <span class="cov9" title="1018">{
         for k, v := range conditions </span><span class="cov4" title="19">{
                 if ctx[k] != v </span><span class="cov3" title="9">{
                         return false
                 }</span>
         }
         // Handle percent rule (optional)
-        <span class="cov9" title="1008">if rule.Percent != nil </span><span class="cov9" title="1000">{
+        <span class="cov9" title="1009">if rule.Percent != nil </span><span class="cov9" title="1001">{
                 if *rule.Percent &lt;= 0 </span><span class="cov0" title="0">{
                         return false
                 }</span>
-                <span class="cov9" title="1000">seedKey := rule.Seed
+                <span class="cov9" title="1001">seedKey := rule.Seed
                 if seedKey == "" </span><span class="cov0" title="0">{
                         return false
                 }</span>
-                <span class="cov9" title="1000">seedVal, ok := ctx[seedKey]
-                if !ok </span><span class="cov0" title="0">{
-                        return false
-                }</span>
-                <span class="cov9" title="1000">percent := hashToPercent(seedVal)
+                <span class="cov9" title="1001">seedVal, ok := ctx[seedKey]
+                if !ok </span><span class="cov1" title="1">{
+                        // Fallback: if seed is missing, and we're asking for hostname, try env
+                        if seedKey == "HOSTNAME" </span><span class="cov1" title="1">{
+                                if val, err := os.Hostname(); err == nil &amp;&amp; val != "" </span><span class="cov1" title="1">{
+                                        seedVal = val
+                                }</span> else<span class="cov0" title="0"> {
+                                        return false // No fallback available
+                                }</span>
+                        } else<span class="cov0" title="0"> {
+                                return false
+                        }</span>
+                }
+                <span class="cov9" title="1001">percent := hashToPercent(seedVal)
                 return percent &lt; *rule.Percent</span>
         }
         <span class="cov3" title="8">return true</span>
@@ -412,7 +423,7 @@ import (
         "hash/fnv"
 )
 
-func hashToPercent(input string) int <span class="cov10" title="1000">{
+func hashToPercent(input string) int <span class="cov10" title="1001">{
         h := fnv.New32a()
         _, _ = h.Write([]byte(input))
         return int(h.Sum32() % 100)

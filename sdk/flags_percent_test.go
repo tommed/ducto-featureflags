@@ -34,3 +34,19 @@ func TestPercentRollout(t *testing.T) {
 	assert.Greater(t, match, 50) // Expect some rollout
 	assert.Less(t, match, 150)   // Should stay near 10%
 }
+
+func TestPercentFallbackToHostname(t *testing.T) {
+	percent := 100
+	rule := Rule{
+		Percent: &percent,
+		Seed:    "HOSTNAME",
+		Value:   true,
+	}
+	flag := Flag{
+		Rules: []Rule{rule},
+	}
+
+	// Remove HOSTNAME from context
+	ctx := EvalContext{}
+	assert.Equal(t, true, flag.Evaluate(ctx)) // Should fallback to env
+}

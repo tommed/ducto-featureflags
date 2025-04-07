@@ -1,49 +1,39 @@
 package sdk
 
-import (
-	"encoding/json"
-	"fmt"
-	"os"
-)
-
 // Flag represents a single feature flag definition
 type Flag struct {
-	Enabled bool `json:"enabled"`
+	Enabled *bool  `json:"enabled,omitempty"` // Static fallback/default
+	Rules   []Rule `json:"rules,omitempty"`   // Optional targeting logic
 	// Future: rollout %, conditions, etc.
 }
 
-// Store holds the loaded feature flags
-type Store struct {
-	flags map[string]Flag
+type Rule struct {
+	If    map[string]string `json:"if,omitempty"` // Simple AND-matching conditions
+	Value bool              `json:"value"`        // Result if rule matches
 }
 
-// NewStoreFromFile loads flags from a JSON file into memory
-func NewStoreFromFile(path string) (*Store, error) {
-	data, err := os.ReadFile(path)
-	if err != nil {
-		return nil, fmt.Errorf("read flag file: %w", err)
+type EvalContext map[string]string
+
+// Evaluate performs rule-based or fallback evaluation
+func (f Flag) Evaluate(ctx EvalContext) bool {
+	// Check rules first
+	for _, rule := range f.Rules {
+		if ruleMatches(rule.If, ctx) {
+			return rule.Value
+		}
 	}
-	return NewStoreFromBytes(data)
-}
-
-// NewStoreFromBytes allows loading from embedded JSON or remote fetch
-func NewStoreFromBytes(data []byte) (*Store, error) {
-	var parsed struct {
-		Flags map[string]Flag `json:"flags"`
+	// Fallback to Enabled
+	if f.Enabled != nil {
+		return *f.Enabled
 	}
-	if err := json.Unmarshal(data, &parsed); err != nil {
-		return nil, fmt.Errorf("parse flag JSON: %w", err)
+	return false
+}
+
+func ruleMatches(conditions map[string]string, ctx EvalContext) bool {
+	for k, v := range conditions {
+		if ctx[k] != v {
+			return false
+		}
 	}
-	return &Store{flags: parsed.Flags}, nil
-}
-
-// IsEnabled returns true if the flag is defined and enabled
-func (s *Store) IsEnabled(key string) bool {
-	flag, ok := s.flags[key]
-	return ok && flag.Enabled
-}
-
-// AllFlags returns the raw flag map
-func (s *Store) AllFlags() map[string]Flag {
-	return s.flags
+	return true
 }

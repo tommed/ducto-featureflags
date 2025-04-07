@@ -38,6 +38,7 @@ It supports both static file-based flags and dynamic backends (coming soon), and
 ---
 ## 🔧 Example Flag File
 
+The simplest possible flag file is static like so:
 ```json
 {
   "flags": {
@@ -51,13 +52,28 @@ It supports both static file-based flags and dynamic backends (coming soon), and
 }
 ```
 
+To make this more dynamic, you can add rules based on an `EvalContext`:
+```json
+{
+  "flags": {
+    "new_ui": {
+      "rules": [
+        { "if": { "env": "prod", "group": "beta" }, "value": true },
+        { "if": { "env": "prod" }, "value": false }
+      ],
+      "enabled": true
+    }
+  }
+}
+```
+
 ---
 ## 🧑‍💻 Usage (SDK)
 
 ```golang
 store, _ := featureflags.NewStoreFromFile("flags.json")
 
-if store.IsEnabled("new_ui") {
+if store.IsEnabled("new_ui", featureflags.EvalContext{}) {
     // Enable experimental flow
 }
 ```
@@ -73,7 +89,7 @@ go install github.com/tommed/ducto-featureflags/cmd/ducto-flags@latest
 
 ```bash
 # Check if a single flag is enabled
-ducto-flags -file flags.json -key new_ui
+ducto-flags -file flags.json -key new_ui -ctx env=prod -ctx region=EU
 
 # Print all flags
 ducto-flags -file flags.json -list
@@ -84,6 +100,7 @@ ducto-flags -file flags.json -list
 - [x] JSON file
 - [ ] HTTP endpoint
 - [ ] Redis
+- [ ] Google Firestore
 - [ ] Env var overrides
 - [ ] Versioned flag API with auditing
 

@@ -57,11 +57,15 @@
 				
 				<option value="file0">github.com/tommed/ducto-featureflags/cmd/ducto-flags/main.go (0.0%)</option>
 				
-				<option value="file1">github.com/tommed/ducto-featureflags/internal/cli/runner.go (100.0%)</option>
+				<option value="file1">github.com/tommed/ducto-featureflags/internal/cli/context.go (100.0%)</option>
 				
-				<option value="file2">github.com/tommed/ducto-featureflags/sdk/flags.go (100.0%)</option>
+				<option value="file2">github.com/tommed/ducto-featureflags/internal/cli/runner.go (100.0%)</option>
 				
-				<option value="file3">github.com/tommed/ducto-featureflags/sdk/watch.go (78.3%)</option>
+				<option value="file3">github.com/tommed/ducto-featureflags/sdk/flags.go (100.0%)</option>
+				
+				<option value="file4">github.com/tommed/ducto-featureflags/sdk/store.go (100.0%)</option>
+				
+				<option value="file5">github.com/tommed/ducto-featureflags/sdk/watch.go (78.3%)</option>
 				
 				</select>
 			</div>
@@ -100,6 +104,36 @@ func main() <span class="cov0" title="0">{
 		<pre class="file" id="file1" style="display: none">package cli
 
 import (
+        "strings"
+
+        "github.com/tommed/ducto-featureflags/sdk"
+)
+
+// For repeated --ctx key=value
+type arrayFlags []string
+
+func (a *arrayFlags) String() string <span class="cov10" title="10">{ return strings.Join(*a, ",") }</span>
+func (a *arrayFlags) Set(value string) error <span class="cov1" title="1">{
+        *a = append(*a, value)
+        return nil
+}</span>
+
+// Converts --ctx key=value into EvalContext
+func parseContext(flags []string) sdk.EvalContext <span class="cov3" title="2">{
+        ctx := sdk.EvalContext{}
+        for _, f := range flags </span><span class="cov1" title="1">{
+                parts := strings.SplitN(f, "=", 2)
+                if len(parts) == 2 </span><span class="cov1" title="1">{
+                        ctx[parts[0]] = parts[1]
+                }</span>
+        }
+        <span class="cov3" title="2">return ctx</span>
+}
+</pre>
+		
+		<pre class="file" id="file2" style="display: none">package cli
+
+import (
         "encoding/json"
         "flag"
         "fmt"
@@ -109,43 +143,47 @@ import (
 )
 
 //goland:noinspection GoUnhandledErrorResult
-func Run(args []string, stdout, stderr io.Writer) int <span class="cov10" title="7">{
+func Run(args []string, stdout, stderr io.Writer) int <span class="cov10" title="8">{
         fs := flag.NewFlagSet("ducto-flags", flag.ContinueOnError)
         fs.SetOutput(stderr)
 
         var file string
         var key string
         var printAll bool
+        var ctxFlags arrayFlags
+
         fs.StringVar(&amp;file, "file", "flags.json", "Path to feature flag definition file")
         fs.StringVar(&amp;key, "key", "", "Feature flag key to check")
         fs.BoolVar(&amp;printAll, "list", false, "Print all loaded flags")
+        fs.Var(&amp;ctxFlags, "ctx", "Context key=value pair (can be used multiple times)")
         if err := fs.Parse(args); err != nil </span><span class="cov4" title="2">{
                 fmt.Fprintf(stderr, "failed to parse args: %v\n", err)
                 return 1
         }</span>
 
-        <span class="cov8" title="5">if file == "" </span><span class="cov1" title="1">{
+        <span class="cov8" title="6">if file == "" </span><span class="cov1" title="1">{
                 fmt.Fprintf(stderr, "missing required flag: -file")
                 return 1
         }</span>
 
-        <span class="cov7" title="4">if key == "" &amp;&amp; !printAll </span><span class="cov1" title="1">{
+        <span class="cov7" title="5">if key == "" &amp;&amp; !printAll </span><span class="cov1" title="1">{
                 fmt.Fprintf(stderr, "must provide either -key or -list")
                 return 1
         }</span>
 
-        <span class="cov6" title="3">store, err := sdk.NewStoreFromFile(file)
+        <span class="cov7" title="4">store, err := sdk.NewStoreFromFile(file)
         if err != nil </span><span class="cov1" title="1">{
                 fmt.Fprintf(stderr, "failed to load flags: %v", err)
                 return 1
         }</span>
 
-        <span class="cov4" title="2">if printAll </span><span class="cov1" title="1">{
+        <span class="cov5" title="3">if printAll </span><span class="cov1" title="1">{
                 dumpAllFlags(stdout, store)
                 return 0
         }</span>
 
-        <span class="cov1" title="1">result := store.IsEnabled(key)
+        <span class="cov4" title="2">ctx := parseContext(ctxFlags)
+        result := store.IsEnabled(key, ctx)
         fmt.Fprintf(stdout, "Flag %q is %v\n", key, result)
         return 0</span>
 }
@@ -157,7 +195,48 @@ func dumpAllFlags(stdout io.Writer, store *sdk.Store) <span class="cov1" title="
 }</span>
 </pre>
 		
-		<pre class="file" id="file2" style="display: none">package sdk
+		<pre class="file" id="file3" style="display: none">package sdk
+
+// Flag represents a single feature flag definition
+type Flag struct {
+        Enabled *bool  `json:"enabled,omitempty"` // Static fallback/default
+        Rules   []Rule `json:"rules,omitempty"`   // Optional targeting logic
+        // Future: rollout %, conditions, etc.
+}
+
+type Rule struct {
+        If    map[string]string `json:"if,omitempty"` // Simple AND-matching conditions
+        Value bool              `json:"value"`        // Result if rule matches
+}
+
+type EvalContext map[string]string
+
+// Evaluate performs rule-based or fallback evaluation
+func (f Flag) Evaluate(ctx EvalContext) bool <span class="cov10" title="16">{
+        // Check rules first
+        for _, rule := range f.Rules </span><span class="cov8" title="9">{
+                if ruleMatches(rule.If, ctx) </span><span class="cov5" title="4">{
+                        return rule.Value
+                }</span>
+        }
+        // Fallback to Enabled
+        <span class="cov9" title="12">if f.Enabled != nil </span><span class="cov8" title="10">{
+                return *f.Enabled
+        }</span>
+        <span class="cov3" title="2">return false</span>
+}
+
+func ruleMatches(conditions map[string]string, ctx EvalContext) bool <span class="cov8" title="9">{
+        for k, v := range conditions </span><span class="cov8" title="9">{
+                if ctx[k] != v </span><span class="cov6" title="5">{
+                        return false
+                }</span>
+        }
+        <span class="cov5" title="4">return true</span>
+}
+</pre>
+		
+		<pre class="file" id="file4" style="display: none">package sdk
 
 import (
         "encoding/json"
@@ -165,41 +244,43 @@ import (
         "os"
 )
 
-// Flag represents a single feature flag definition
-type Flag struct {
-        Enabled bool `json:"enabled"`
-        // Future: rollout %, conditions, etc.
-}
-
 // Store holds the loaded feature flags
 type Store struct {
         flags map[string]Flag
 }
 
 // NewStoreFromFile loads flags from a JSON file into memory
-func NewStoreFromFile(path string) (*Store, error) <span class="cov9" title="9">{
+func NewStoreFromFile(path string) (*Store, error) <span class="cov9" title="10">{
         data, err := os.ReadFile(path)
         if err != nil </span><span class="cov3" title="2">{
                 return nil, fmt.Errorf("read flag file: %w", err)
         }</span>
-        <span class="cov8" title="7">return NewStoreFromBytes(data)</span>
+        <span class="cov8" title="8">return NewStoreFromBytes(data)</span>
 }
 
 // NewStoreFromBytes allows loading from embedded JSON or remote fetch
-func NewStoreFromBytes(data []byte) (*Store, error) <span class="cov10" title="10">{
+func NewStoreFromBytes(data []byte) (*Store, error) <span class="cov10" title="12">{
         var parsed struct {
                 Flags map[string]Flag `json:"flags"`
         }
         if err := json.Unmarshal(data, &amp;parsed); err != nil </span><span class="cov3" title="2">{
                 return nil, fmt.Errorf("parse flag JSON: %w", err)
         }</span>
-        <span class="cov9" title="8">return &amp;Store{flags: parsed.Flags}, nil</span>
+        <span class="cov9" title="10">return &amp;Store{flags: parsed.Flags}, nil</span>
+}
+
+// Evaluate supports rule-based matching
+func (s *Store) Evaluate(key string, ctx EvalContext) bool <span class="cov9" title="11">{
+        flag, ok := s.flags[key]
+        if !ok </span><span class="cov3" title="2">{
+                return false
+        }</span>
+        <span class="cov8" title="9">return flag.Evaluate(ctx)</span>
 }
 
 // IsEnabled returns true if the flag is defined and enabled
-func (s *Store) IsEnabled(key string) bool <span class="cov8" title="7">{
-        flag, ok := s.flags[key]
-        return ok &amp;&amp; flag.Enabled
+func (s *Store) IsEnabled(key string, ctx EvalContext) bool <span class="cov8" title="8">{
+        return s.Evaluate(key, ctx)
 }</span>
 
 // AllFlags returns the raw flag map
@@ -208,7 +289,7 @@ func (s *Store) AllFlags() map[string]Flag <span class="cov3" title="2">{
 }</span>
 </pre>
 		
-		<pre class="file" id="file3" style="display: none">package sdk
+		<pre class="file" id="file5" style="display: none">package sdk
 
 import (
         "fmt"
@@ -310,7 +391,7 @@ func (s *WatchingStore) reload() <span class="cov3" title="2">{
 func (s *WatchingStore) IsEnabled(key string) bool <span class="cov3" title="2">{
         s.mu.RLock()
         defer s.mu.RUnlock()
-        return s.store.IsEnabled(key)
+        return s.store.IsEnabled(key, EvalContext{})
 }</span>
 
 func (s *WatchingStore) AllFlags() map[string]Flag <span class="cov0" title="0">{

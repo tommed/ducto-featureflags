@@ -3,6 +3,7 @@ package cli
 
 import (
 	"bytes"
+	"io"
 	"os"
 	"path/filepath"
 	"testing"
@@ -28,7 +29,7 @@ func TestRun_QuerySingleFlag(t *testing.T) {
 	path := writeTempFlags(t, flags)
 
 	stdout := new(bytes.Buffer)
-	stderr := new(bytes.Buffer)
+	stderr := io.Discard
 	code := Run([]string{"-file", path, "-key", "beta"}, stdout, stderr)
 
 	assert.Equal(t, 0, code)
@@ -36,7 +37,7 @@ func TestRun_QuerySingleFlag(t *testing.T) {
 }
 
 func TestRun_MissingKeyAndList(t *testing.T) {
-	stdout := new(bytes.Buffer)
+	stdout := io.Discard
 	stderr := new(bytes.Buffer)
 
 	code := Run([]string{"-file", "flags.json"}, stdout, stderr)
@@ -46,7 +47,7 @@ func TestRun_MissingKeyAndList(t *testing.T) {
 }
 
 func TestRun_MissingFile(t *testing.T) {
-	stdout := new(bytes.Buffer)
+	stdout := io.Discard
 	stderr := new(bytes.Buffer)
 
 	code := Run([]string{"-list", "-file", ""}, stdout, stderr)
@@ -56,7 +57,7 @@ func TestRun_MissingFile(t *testing.T) {
 }
 
 func TestRun_InvalidFlagFile(t *testing.T) {
-	stdout := new(bytes.Buffer)
+	stdout := io.Discard
 	stderr := new(bytes.Buffer)
 
 	code := Run([]string{"-file", "nonexistent.json", "-key", "x"}, stdout, stderr)
@@ -66,7 +67,7 @@ func TestRun_InvalidFlagFile(t *testing.T) {
 }
 
 func TestRun_InvalidArgs(t *testing.T) {
-	stdout := new(bytes.Buffer)
+	stdout := io.Discard
 	stderr := new(bytes.Buffer)
 
 	// Missing value for -key
@@ -77,7 +78,7 @@ func TestRun_InvalidArgs(t *testing.T) {
 }
 
 func TestRun_UnknownFlag(t *testing.T) {
-	stdout := new(bytes.Buffer)
+	stdout := io.Discard
 	stderr := new(bytes.Buffer)
 
 	code := Run([]string{"-unknown"}, stdout, stderr)
@@ -101,7 +102,7 @@ func TestRun_WithContextEvaluation(t *testing.T) {
 	path := writeTempFlags(t, flags)
 
 	stdout := new(bytes.Buffer)
-	stderr := new(bytes.Buffer)
+	stderr := io.Discard
 
 	code := Run([]string{
 		"-file", path,

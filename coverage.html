@@ -63,13 +63,17 @@
 				
 				<option value="file3">github.com/tommed/ducto-featureflags/internal/cli/runner.go (100.0%)</option>
 				
-				<option value="file4">github.com/tommed/ducto-featureflags/internal/cli/serve.go (72.4%)</option>
+				<option value="file4">github.com/tommed/ducto-featureflags/internal/cli/serve.go (79.5%)</option>
 				
-				<option value="file5">github.com/tommed/ducto-featureflags/sdk/flags.go (100.0%)</option>
+				<option value="file5">github.com/tommed/ducto-featureflags/sdk/flags.go (85.7%)</option>
 				
-				<option value="file6">github.com/tommed/ducto-featureflags/sdk/store.go (95.2%)</option>
+				<option value="file6">github.com/tommed/ducto-featureflags/sdk/flags_http.go (75.0%)</option>
 				
-				<option value="file7">github.com/tommed/ducto-featureflags/sdk/watch.go (78.3%)</option>
+				<option value="file7">github.com/tommed/ducto-featureflags/sdk/hash.go (100.0%)</option>
+				
+				<option value="file8">github.com/tommed/ducto-featureflags/sdk/store.go (95.2%)</option>
+				
+				<option value="file9">github.com/tommed/ducto-featureflags/sdk/watch.go (78.3%)</option>
 				
 				</select>
 			</div>
@@ -232,50 +236,66 @@ import (
 )
 
 //goland:noinspection GoUnhandledErrorResult
-func Serve(args []string, stdout, stderr io.Writer) int <span class="cov1" title="1">{
+func Serve(args []string, stdout, stderr io.Writer) int <span class="cov6" title="2">{
         fs := flag.NewFlagSet("serve", flag.ExitOnError)
+
         var file string
         var addr string
+        var token string
 
         fs.StringVar(&amp;file, "file", "flags.json", "Path to feature flag definition file")
         fs.StringVar(&amp;addr, "addr", ":8080", "Listen address")
+        fs.StringVar(&amp;token, "token", "", "Optional bearer token required to access the API")
 
         if err := fs.Parse(args); err != nil </span><span class="cov0" title="0">{
-                fmt.Fprintf(stderr, "failed to parse serve flags: %v", err)
+                fmt.Fprintf(stderr, "failed to parse serve flags: %v\n", err)
                 return 1
         }</span>
 
-        <span class="cov1" title="1">store, err := sdk.NewWatchingStore(file)
+        <span class="cov6" title="2">store, err := sdk.NewWatchingStore(file)
         if err != nil </span><span class="cov0" title="0">{
-                fmt.Fprintf(stderr, "failed to load flags: %v", err)
+                fmt.Fprintf(stderr, "failed to load flags: %v\n", err)
                 return 1
         }</span>
-        <span class="cov1" title="1">defer store.Close()
+        <span class="cov6" title="2">defer store.Close()
 
-        http.HandleFunc("/api/flags", func(w http.ResponseWriter, r *http.Request) </span><span class="cov1" title="1">{
-                key := r.URL.Query().Get("key")
+        mux := http.NewServeMux()
+        mux.HandleFunc("/api/flags", func(w http.ResponseWriter, r *http.Request) </span><span class="cov10" title="3">{
+                if token != "" </span><span class="cov6" title="2">{
+                        auth := r.Header.Get("Authorization")
+                        expected := "Bearer " + token
+                        if auth != expected </span><span class="cov1" title="1">{
+                                http.Error(w, "unauthorized", http.StatusUnauthorized)
+                                return
+                        }</span>
+                }
+
+                <span class="cov6" title="2">key := r.URL.Query().Get("key")
 
                 // Convert query params to EvalContext
                 ctx := sdk.EvalContext{}
-                for k, v := range r.URL.Query() </span><span class="cov10" title="2">{
-                        if len(v) &gt; 0 </span><span class="cov10" title="2">{
+                for k, v := range r.URL.Query() </span><span class="cov10" title="3">{
+                        if len(v) &gt; 0 </span><span class="cov10" title="3">{
                                 ctx[k] = v[0]
                         }</span>
                 }
 
-                // Return single flag value
-                <span class="cov1" title="1">if key != "" </span><span class="cov1" title="1">{
+                <span class="cov6" title="2">if key != "" </span><span class="cov6" title="2">{
                         result := store.IsEnabled(key, ctx)
                         _ = json.NewEncoder(w).Encode(map[string]bool{"enabled": result})
                         return
                 }</span>
 
-                // Return all flags (raw definition)
                 <span class="cov0" title="0">_ = json.NewEncoder(w).Encode(store.AllFlags())</span>
         })
 
-        <span class="cov1" title="1">fmt.Fprintf(stdout, "Listening on %s...\n", addr)
-        if err := http.ListenAndServe(addr, nil); err != nil </span><span class="cov0" title="0">{
+        <span class="cov6" title="2">server := &amp;http.Server{
+                Addr:    addr,
+                Handler: mux,
+        }
+
+        fmt.Fprintf(stdout, "Listening on %s...\n", addr)
+        if err := server.ListenAndServe(); err != nil </span><span class="cov0" title="0">{
                 fmt.Fprintf(stderr, "server failed: %v", err)
                 return 1
         }</span>
@@ -294,38 +314,112 @@ type Flag struct {
 }
 
 type Rule struct {
-        If    map[string]string `json:"if,omitempty"` // Simple AND-matching conditions
-        Value bool              `json:"value"`        // Result if rule matches
+        If    map[string]string `json:"if,omitempty" yaml:"if,omitempty"`
+        Value bool              `json:"value"`
+        // Optional targeting
+        Percent *int   `json:"percent,omitempty" yaml:"percent,omitempty"` // 0–100
+        Seed    string `json:"seed,omitempty" yaml:"seed,omitempty"`       // key in context
 }
 
 type EvalContext map[string]string
 
 // Evaluate performs rule-based or fallback evaluation
-func (f Flag) Evaluate(ctx EvalContext) bool <span class="cov10" title="20">{
+func (f Flag) Evaluate(ctx EvalContext) bool <span class="cov10" title="1024">{
         // Check rules first
-        for _, rule := range f.Rules </span><span class="cov9" title="15">{
-                if ruleMatches(rule.If, ctx) </span><span class="cov6" title="7">{
+        for _, rule := range f.Rules </span><span class="cov9" title="1017">{
+                if ruleMatches(rule.If, ctx, rule) </span><span class="cov7" title="110">{
                         return rule.Value
                 }</span>
         }
         // Fallback to Enabled
-        <span class="cov8" title="13">if f.Enabled != nil </span><span class="cov8" title="11">{
+        <span class="cov9" title="914">if f.Enabled != nil </span><span class="cov9" title="912">{
                 return *f.Enabled
         }</span>
-        <span class="cov3" title="2">return false</span>
+        <span class="cov1" title="2">return false</span>
 }
 
-func ruleMatches(conditions map[string]string, ctx EvalContext) bool <span class="cov9" title="15">{
-        for k, v := range conditions </span><span class="cov9" title="17">{
-                if ctx[k] != v </span><span class="cov7" title="8">{
+func ruleMatches(conditions map[string]string, ctx EvalContext, rule Rule) bool <span class="cov9" title="1017">{
+        for k, v := range conditions </span><span class="cov4" title="19">{
+                if ctx[k] != v </span><span class="cov3" title="9">{
                         return false
                 }</span>
         }
-        <span class="cov6" title="7">return true</span>
+        // Handle percent rule (optional)
+        <span class="cov9" title="1008">if rule.Percent != nil </span><span class="cov9" title="1000">{
+                if *rule.Percent &lt;= 0 </span><span class="cov0" title="0">{
+                        return false
+                }</span>
+                <span class="cov9" title="1000">seedKey := rule.Seed
+                if seedKey == "" </span><span class="cov0" title="0">{
+                        return false
+                }</span>
+                <span class="cov9" title="1000">seedVal, ok := ctx[seedKey]
+                if !ok </span><span class="cov0" title="0">{
+                        return false
+                }</span>
+                <span class="cov9" title="1000">percent := hashToPercent(seedVal)
+                return percent &lt; *rule.Percent</span>
+        }
+        <span class="cov3" title="8">return true</span>
 }
 </pre>
 		
 		<pre class="file" id="file6" style="display: none">package sdk
+
+import (
+        "fmt"
+        "io"
+        "net/http"
+)
+
+// NewStoreFromURL loads a flag file from an HTTP(S) endpoint.
+// It auto-detects JSON or YAML based on the file extension.
+func NewStoreFromURL(url string, token string) (*Store, error) <span class="cov10" title="2">{
+        req, err := http.NewRequest("GET", url, nil)
+        if err != nil </span><span class="cov0" title="0">{
+                return nil, fmt.Errorf("build request: %w", err)
+        }</span>
+
+        <span class="cov10" title="2">if token != "" </span><span class="cov1" title="1">{
+                req.Header.Set("Authorization", "Bearer "+token)
+        }</span>
+
+        <span class="cov10" title="2">resp, err := http.DefaultClient.Do(req)
+        if err != nil </span><span class="cov0" title="0">{
+                return nil, fmt.Errorf("fetch flags: %w", err)
+        }</span>
+
+        //goland:noinspection GoUnhandledErrorResult
+        <span class="cov10" title="2">defer resp.Body.Close()
+
+        if resp.StatusCode &gt;= 400 </span><span class="cov0" title="0">{
+                return nil, fmt.Errorf("server error: %s", resp.Status)
+        }</span>
+
+        <span class="cov10" title="2">body, err := io.ReadAll(resp.Body)
+        if err != nil </span><span class="cov0" title="0">{
+                return nil, fmt.Errorf("read response: %w", err)
+        }</span>
+
+        <span class="cov10" title="2">format := detectFormat(url)
+        return NewStoreFromBytesWithFormat(body, format)</span>
+}
+</pre>
+		
+		<pre class="file" id="file7" style="display: none">package sdk
+
+import (
+        "hash/fnv"
+)
+
+func hashToPercent(input string) int <span class="cov10" title="1000">{
+        h := fnv.New32a()
+        _, _ = h.Write([]byte(input))
+        return int(h.Sum32() % 100)
+}</span>
+</pre>
+		
+		<pre class="file" id="file8" style="display: none">package sdk
 
 import (
         "encoding/json"
@@ -343,53 +437,53 @@ type Store struct {
 }
 
 // NewStoreFromFile loads flags from a JSON file into memory
-func NewStoreFromFile(path string) (*Store, error) <span class="cov9" title="12">{
+func NewStoreFromFile(path string) (*Store, error) <span class="cov8" title="13">{
         data, err := os.ReadFile(path)
         if err != nil </span><span class="cov3" title="2">{
                 return nil, fmt.Errorf("read flag file: %w", err)
         }</span>
-        <span class="cov8" title="10">return NewStoreFromBytesWithFormat(data, detectFormat(path))</span>
+        <span class="cov8" title="11">return NewStoreFromBytesWithFormat(data, detectFormat(path))</span>
 }
 
-func detectFormat(path string) string <span class="cov8" title="10">{
+func detectFormat(path string) string <span class="cov8" title="13">{
         ext := strings.ToLower(filepath.Ext(path))
         switch ext </span>{
-        case ".yaml", ".yml":<span class="cov1" title="1">
+        case ".yaml", ".yml":<span class="cov3" title="2">
                 return "yaml"</span>
-        default:<span class="cov8" title="9">
+        default:<span class="cov8" title="11">
                 return "json"</span>
         }
 }
 
 // NewStoreFromBytesWithFormat allows loading from embedded YAML or JSON or remote fetch
-func NewStoreFromBytesWithFormat(data []byte, format string) (*Store, error) <span class="cov9" title="14">{
+func NewStoreFromBytesWithFormat(data []byte, format string) (*Store, error) <span class="cov9" title="17">{
         var parsed struct {
                 Flags map[string]Flag `json:"flags"`
         }
         switch format </span>{
-        case "yaml":<span class="cov1" title="1">
+        case "yaml":<span class="cov3" title="2">
                 if err := yaml.Unmarshal(data, &amp;parsed); err != nil </span><span class="cov0" title="0">{
                         return nil, fmt.Errorf("parse YAML: %w", err)
                 }</span>
-        default:<span class="cov9" title="13">
+        default:<span class="cov9" title="15">
                 if err := json.Unmarshal(data, &amp;parsed); err != nil </span><span class="cov3" title="2">{
                         return nil, fmt.Errorf("parse JSON: %w", err)
                 }</span>
         }
-        <span class="cov9" title="12">return &amp;Store{flags: parsed.Flags}, nil</span>
+        <span class="cov9" title="15">return &amp;Store{flags: parsed.Flags}, nil</span>
 }
 
 // Evaluate supports rule-based matching
-func (s *Store) Evaluate(key string, ctx EvalContext) bool <span class="cov10" title="16">{
+func (s *Store) Evaluate(key string, ctx EvalContext) bool <span class="cov10" title="20">{
         flag, ok := s.flags[key]
         if !ok </span><span class="cov4" title="3">{
                 return false
         }</span>
-        <span class="cov9" title="13">return flag.Evaluate(ctx)</span>
+        <span class="cov9" title="17">return flag.Evaluate(ctx)</span>
 }
 
 // IsEnabled returns true if the flag is defined and enabled
-func (s *Store) IsEnabled(key string, ctx EvalContext) bool <span class="cov9" title="13">{
+func (s *Store) IsEnabled(key string, ctx EvalContext) bool <span class="cov9" title="17">{
         return s.Evaluate(key, ctx)
 }</span>
 
@@ -399,7 +493,7 @@ func (s *Store) AllFlags() map[string]Flag <span class="cov3" title="2">{
 }</span>
 </pre>
 		
-		<pre class="file" id="file7" style="display: none">package sdk
+		<pre class="file" id="file9" style="display: none">package sdk
 
 import (
         "fmt"
@@ -421,12 +515,12 @@ type WatchingStore struct {
 }
 
 // NewWatchingStore creates a WatchingStore that watches the given file.
-func NewWatchingStore(path string) (*WatchingStore, error) <span class="cov4" title="3">{
+func NewWatchingStore(path string) (*WatchingStore, error) <span class="cov5" title="4">{
         absPath, err := filepath.Abs(path)
         if err != nil </span><span class="cov0" title="0">{
                 return nil, err
         }</span>
-        <span class="cov4" title="3">s := &amp;WatchingStore{
+        <span class="cov5" title="4">s := &amp;WatchingStore{
                 path:   absPath,
                 events: make(chan struct{}, 1),
                 errors: make(chan error, 1),
@@ -437,19 +531,19 @@ func NewWatchingStore(path string) (*WatchingStore, error) <span class="cov4" ti
         if err != nil </span><span class="cov0" title="0">{
                 return nil, err
         }</span>
-        <span class="cov4" title="3">s.store = store
+        <span class="cov5" title="4">s.store = store
 
         go s.watch()
         return s, nil</span>
 }
 
-func (s *WatchingStore) watch() <span class="cov4" title="3">{
+func (s *WatchingStore) watch() <span class="cov5" title="4">{
         watcher, err := fsnotify.NewWatcher()
         if err != nil </span><span class="cov0" title="0">{
                 s.errors &lt;- fmt.Errorf("watcher init failed: %w", err)
                 return
         }</span>
-        <span class="cov4" title="3">defer watcher.Close()
+        <span class="cov5" title="4">defer watcher.Close()
 
         dir := s.watchDir()
         if err := watcher.Add(dir); err != nil </span><span class="cov0" title="0">{
@@ -457,11 +551,11 @@ func (s *WatchingStore) watch() <span class="cov4" title="3">{
                 return
         }</span>
 
-        <span class="cov4" title="3">for </span><span class="cov10" title="13">{
+        <span class="cov5" title="4">for </span><span class="cov10" title="16">{
                 select </span>{
                 case &lt;-s.done:<span class="cov3" title="2">
                         return</span>
-                case evt := &lt;-watcher.Events:<span class="cov9" title="10">
+                case evt := &lt;-watcher.Events:<span class="cov9" title="12">
                         evtPath := filepath.Clean(evt.Name)
                         watchPath := filepath.Clean(s.path)
 
@@ -475,7 +569,7 @@ func (s *WatchingStore) watch() <span class="cov4" title="3">{
         }
 }
 
-func (s *WatchingStore) watchDir() string <span class="cov4" title="3">{
+func (s *WatchingStore) watchDir() string <span class="cov5" title="4">{
         return filepath.Dir(s.path)
 }</span>
 
@@ -498,7 +592,7 @@ func (s *WatchingStore) reload() <span class="cov3" title="2">{
 }
 
 // IsEnabled implements the Store interface.
-func (s *WatchingStore) IsEnabled(key string, ctx EvalContext) bool <span class="cov4" title="3">{
+func (s *WatchingStore) IsEnabled(key string, ctx EvalContext) bool <span class="cov5" title="4">{
         s.mu.RLock()
         defer s.mu.RUnlock()
         return s.store.IsEnabled(key, ctx)

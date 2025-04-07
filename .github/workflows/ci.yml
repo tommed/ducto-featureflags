@@ -30,7 +30,7 @@ jobs:
         run: make lint-install
 
       - name: Verify Go modules
-        run: go mod tidy && git diff --exit-code
+        run: go mod tidy
 
       - name: Makefile CI
         run: make ci

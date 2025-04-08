@@ -1,7 +1,5 @@
 package sdk
 
-import "os"
-
 // Flag represents a single feature flag definition
 type Flag struct {
 	Enabled *bool  `json:"enabled,omitempty"` // Static fallback/default
@@ -13,8 +11,9 @@ type Rule struct {
 	If    map[string]string `json:"if,omitempty" yaml:"if,omitempty"`
 	Value bool              `json:"value"`
 	// Optional targeting
-	Percent *int   `json:"percent,omitempty" yaml:"percent,omitempty"` // 0–100
-	Seed    string `json:"seed,omitempty" yaml:"seed,omitempty"`       // key in context
+	Percent  *int   `json:"percent,omitempty" yaml:"percent,omitempty"`     // 0–100
+	Seed     string `json:"seed,omitempty" yaml:"seed,omitempty"`           // key in context
+	SeedHash string `json:"seed_hash,omitempty" yaml:"seed_hash,omitempty"` // e.g. "sha256", "fnv"
 }
 
 type EvalContext map[string]string
@@ -53,16 +52,15 @@ func ruleMatches(conditions map[string]string, ctx EvalContext, rule Rule) bool 
 		if !ok {
 			// Fallback: if seed is missing, and we're asking for hostname, try env
 			if seedKey == "HOSTNAME" {
-				if val, err := os.Hostname(); err == nil && val != "" {
-					seedVal = val
-				} else {
-					return false // No fallback available
+				seedVal = getHostname()
+				if seedVal == "" {
+					return false
 				}
 			} else {
 				return false
 			}
 		}
-		percent := hashToPercent(seedVal)
+		percent := hashToPercent(seedVal, rule.SeedHash)
 		return percent < *rule.Percent
 	}
 	return true

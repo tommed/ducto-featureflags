@@ -35,6 +35,28 @@ func TestPercentRollout(t *testing.T) {
 	assert.Less(t, match, 150)   // Should stay near 10%
 }
 
+func TestPercentWithSeedHashSHA256(t *testing.T) {
+	percent := 100
+	flag := Flag{
+		Rules: []Rule{{
+			Percent:  &percent,
+			Seed:     "user_id",
+			SeedHash: "sha256",
+			Value:    true,
+		}},
+	}
+
+	ctx := EvalContext{"user_id": "abc123"}
+	assert.True(t, flag.Evaluate(ctx)) // Always true with 100%
+
+	// Use a value that maps to >50% with sha256
+	percent = 50
+	flag.Rules[0].Percent = &percent
+	result := flag.Evaluate(ctx)
+
+	t.Logf("Result for abc123 (sha256): %v", result)
+}
+
 func TestPercentFallbackToHostname(t *testing.T) {
 	percent := 100
 	rule := Rule{
@@ -48,5 +70,5 @@ func TestPercentFallbackToHostname(t *testing.T) {
 
 	// Remove HOSTNAME from context
 	ctx := EvalContext{}
-	assert.Equal(t, true, flag.Evaluate(ctx)) // Should fallback to env
+	assert.Equal(t, true, flag.Evaluate(ctx)) // Should fall back to env
 }

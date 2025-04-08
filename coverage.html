@@ -306,8 +306,6 @@ func Serve(args []string, stdout, stderr io.Writer) int <span class="cov6" title
 		
 		<pre class="file" id="file5" style="display: none">package sdk
 
-import "os"
-
 // Flag represents a single feature flag definition
 type Flag struct {
         Enabled *bool  `json:"enabled,omitempty"` // Static fallback/default
@@ -319,17 +317,18 @@ type Rule struct {
         If    map[string]string `json:"if,omitempty" yaml:"if,omitempty"`
         Value bool              `json:"value"`
         // Optional targeting
-        Percent *int   `json:"percent,omitempty" yaml:"percent,omitempty"` // 0–100
-        Seed    string `json:"seed,omitempty" yaml:"seed,omitempty"`       // key in context
+        Percent  *int   `json:"percent,omitempty" yaml:"percent,omitempty"`     // 0–100
+        Seed     string `json:"seed,omitempty" yaml:"seed,omitempty"`           // key in context
+        SeedHash string `json:"seed_hash,omitempty" yaml:"seed_hash,omitempty"` // e.g. "sha256", "fnv"
 }
 
 type EvalContext map[string]string
 
 // Evaluate performs rule-based or fallback evaluation
-func (f Flag) Evaluate(ctx EvalContext) bool <span class="cov10" title="1025">{
+func (f Flag) Evaluate(ctx EvalContext) bool <span class="cov10" title="1027">{
         // Check rules first
-        for _, rule := range f.Rules </span><span class="cov9" title="1018">{
-                if ruleMatches(rule.If, ctx, rule) </span><span class="cov7" title="111">{
+        for _, rule := range f.Rules </span><span class="cov9" title="1020">{
+                if ruleMatches(rule.If, ctx, rule) </span><span class="cov7" title="113">{
                         return rule.Value
                 }</span>
         }
@@ -340,35 +339,34 @@ func (f Flag) Evaluate(ctx EvalContext) bool <span class="cov10" title="1025">{
         <span class="cov1" title="2">return false</span>
 }
 
-func ruleMatches(conditions map[string]string, ctx EvalContext, rule Rule) bool <span class="cov9" title="1018">{
+func ruleMatches(conditions map[string]string, ctx EvalContext, rule Rule) bool <span class="cov9" title="1020">{
         for k, v := range conditions </span><span class="cov4" title="19">{
                 if ctx[k] != v </span><span class="cov3" title="9">{
                         return false
                 }</span>
         }
         // Handle percent rule (optional)
-        <span class="cov9" title="1009">if rule.Percent != nil </span><span class="cov9" title="1001">{
+        <span class="cov9" title="1011">if rule.Percent != nil </span><span class="cov9" title="1003">{
                 if *rule.Percent &lt;= 0 </span><span class="cov0" title="0">{
                         return false
                 }</span>
-                <span class="cov9" title="1001">seedKey := rule.Seed
+                <span class="cov9" title="1003">seedKey := rule.Seed
                 if seedKey == "" </span><span class="cov0" title="0">{
                         return false
                 }</span>
-                <span class="cov9" title="1001">seedVal, ok := ctx[seedKey]
+                <span class="cov9" title="1003">seedVal, ok := ctx[seedKey]
                 if !ok </span><span class="cov1" title="1">{
                         // Fallback: if seed is missing, and we're asking for hostname, try env
                         if seedKey == "HOSTNAME" </span><span class="cov1" title="1">{
-                                if val, err := os.Hostname(); err == nil &amp;&amp; val != "" </span><span class="cov1" title="1">{
-                                        seedVal = val
-                                }</span> else<span class="cov0" title="0"> {
-                                        return false // No fallback available
+                                seedVal = getHostname()
+                                if seedVal == "" </span><span class="cov0" title="0">{
+                                        return false
                                 }</span>
                         } else<span class="cov0" title="0"> {
                                 return false
                         }</span>
                 }
-                <span class="cov9" title="1001">percent := hashToPercent(seedVal)
+                <span class="cov9" title="1003">percent := hashToPercent(seedVal, rule.SeedHash)
                 return percent &lt; *rule.Percent</span>
         }
         <span class="cov3" title="8">return true</span>
@@ -420,14 +418,38 @@ func NewStoreFromURL(url string, token string) (*Store, error) <span class="cov1
 		<pre class="file" id="file7" style="display: none">package sdk
 
 import (
+        "crypto/sha256"
         "hash/fnv"
+        "os"
+        "sync"
 )
 
-func hashToPercent(input string) int <span class="cov10" title="1001">{
-        h := fnv.New32a()
-        _, _ = h.Write([]byte(input))
-        return int(h.Sum32() % 100)
-}</span>
+var (
+        cachedHostname string
+        hostnameOnce   sync.Once
+)
+
+func getHostname() string <span class="cov1" title="1">{
+        hostnameOnce.Do(func() </span><span class="cov1" title="1">{
+                hostname, err := os.Hostname()
+                if err == nil </span><span class="cov1" title="1">{
+                        cachedHostname = hostname
+                }</span>
+        })
+        <span class="cov1" title="1">return cachedHostname</span>
+}
+
+func hashToPercent(value, algo string) int <span class="cov10" title="1003">{
+        switch algo </span>{
+        case "sha256":<span class="cov1" title="2">
+                h := sha256.Sum256([]byte(value))
+                return int(h[0]) % 100</span>
+        default:<span class="cov9" title="1001"> // fallback: FNV
+                h := fnv.New32a()
+                _, _ = h.Write([]byte(value))
+                return int(h.Sum32() % 100)</span>
+        }
+}
 </pre>
 		
 		<pre class="file" id="file8" style="display: none">package sdk

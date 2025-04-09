@@ -15,6 +15,10 @@ type Store struct {
 	flags map[string]Flag
 }
 
+func NewStore(flags map[string]Flag) *Store {
+	return &Store{flags: flags}
+}
+
 // NewStoreFromFile loads flags from a JSON file into memory
 func NewStoreFromFile(path string) (*Store, error) {
 	data, err := os.ReadFile(path)

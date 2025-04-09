@@ -27,7 +27,7 @@ func Serve(args []string, stdout, stderr io.Writer) int {
 		return 1
 	}
 
-	store, err := sdk.NewWatchingStore(file)
+	store, err := sdk.NewFileWatchingStore(file)
 	if err != nil {
 		fmt.Fprintf(stderr, "failed to load flags: %v\n", err)
 		return 1
@@ -46,21 +46,21 @@ func Serve(args []string, stdout, stderr io.Writer) int {
 		}
 
 		key := r.URL.Query().Get("key")
-
-		// Convert query params to EvalContext
-		ctx := sdk.EvalContext{}
-		for k, v := range r.URL.Query() {
-			if len(v) > 0 {
-				ctx[k] = v[0]
-			}
-		}
-
 		if key != "" {
+			// Convert query params to EvalContext
+			ctx := sdk.EvalContext{}
+			for k, v := range r.URL.Query() {
+				if len(v) > 0 {
+					ctx[k] = v[0]
+				}
+			}
+			// Now fetch the flag value
 			result := store.IsEnabled(key, ctx)
 			_ = json.NewEncoder(w).Encode(map[string]bool{"enabled": result})
 			return
 		}
 
+		// Just list all flags
 		_ = json.NewEncoder(w).Encode(store.AllFlags())
 	})
 

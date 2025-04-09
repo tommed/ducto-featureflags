@@ -65,15 +65,17 @@
 				
 				<option value="file4">github.com/tommed/ducto-featureflags/internal/cli/serve.go (79.5%)</option>
 				
-				<option value="file5">github.com/tommed/ducto-featureflags/sdk/flags.go (84.0%)</option>
+				<option value="file5">github.com/tommed/ducto-featureflags/sdk/file.go (93.3%)</option>
 				
-				<option value="file6">github.com/tommed/ducto-featureflags/sdk/flags_http.go (75.0%)</option>
+				<option value="file6">github.com/tommed/ducto-featureflags/sdk/file_watch.go (78.3%)</option>
 				
-				<option value="file7">github.com/tommed/ducto-featureflags/sdk/hash.go (100.0%)</option>
+				<option value="file7">github.com/tommed/ducto-featureflags/sdk/flags.go (84.0%)</option>
 				
-				<option value="file8">github.com/tommed/ducto-featureflags/sdk/store.go (90.9%)</option>
+				<option value="file8">github.com/tommed/ducto-featureflags/sdk/flags_http.go (90.0%)</option>
 				
-				<option value="file9">github.com/tommed/ducto-featureflags/sdk/watch.go (78.3%)</option>
+				<option value="file9">github.com/tommed/ducto-featureflags/sdk/hash.go (100.0%)</option>
+				
+				<option value="file10">github.com/tommed/ducto-featureflags/sdk/store.go (85.7%)</option>
 				
 				</select>
 			</div>
@@ -252,7 +254,7 @@ func Serve(args []string, stdout, stderr io.Writer) int <span class="cov6" title
                 return 1
         }</span>
 
-        <span class="cov6" title="2">store, err := sdk.NewWatchingStore(file)
+        <span class="cov6" title="2">store, err := sdk.NewFileWatchingStore(file)
         if err != nil </span><span class="cov0" title="0">{
                 fmt.Fprintf(stderr, "failed to load flags: %v\n", err)
                 return 1
@@ -271,21 +273,21 @@ func Serve(args []string, stdout, stderr io.Writer) int <span class="cov6" title
                 }
 
                 <span class="cov6" title="2">key := r.URL.Query().Get("key")
-
-                // Convert query params to EvalContext
-                ctx := sdk.EvalContext{}
-                for k, v := range r.URL.Query() </span><span class="cov10" title="3">{
-                        if len(v) &gt; 0 </span><span class="cov10" title="3">{
-                                ctx[k] = v[0]
-                        }</span>
+                if key != "" </span><span class="cov6" title="2">{
+                        // Convert query params to EvalContext
+                        ctx := sdk.EvalContext{}
+                        for k, v := range r.URL.Query() </span><span class="cov10" title="3">{
+                                if len(v) &gt; 0 </span><span class="cov10" title="3">{
+                                        ctx[k] = v[0]
+                                }</span>
+                        }
+                        // Now fetch the flag value
+                        <span class="cov6" title="2">result := store.IsEnabled(key, ctx)
+                        _ = json.NewEncoder(w).Encode(map[string]bool{"enabled": result})
+                        return</span>
                 }
 
-                <span class="cov6" title="2">if key != "" </span><span class="cov6" title="2">{
-                        result := store.IsEnabled(key, ctx)
-                        _ = json.NewEncoder(w).Encode(map[string]bool{"enabled": result})
-                        return
-                }</span>
-
+                // Just list all flags
                 <span class="cov0" title="0">_ = json.NewEncoder(w).Encode(store.AllFlags())</span>
         })
 
@@ -305,6 +307,183 @@ func Serve(args []string, stdout, stderr io.Writer) int <span class="cov6" title
 </pre>
 		
 		<pre class="file" id="file5" style="display: none">package sdk
+
+import (
+        "encoding/json"
+        "fmt"
+        "gopkg.in/yaml.v3"
+        "os"
+        "path/filepath"
+        "strings"
+)
+
+// NewStoreFromFile loads flags from a JSON file into memory
+func NewStoreFromFile(path string) (*Store, error) <span class="cov8" title="13">{
+        data, err := os.ReadFile(path)
+        if err != nil </span><span class="cov3" title="2">{
+                return nil, fmt.Errorf("read flag file: %w", err)
+        }</span>
+        <span class="cov8" title="11">return NewStoreFromBytesWithFormat(data, DetectFormat(path))</span>
+}
+
+// NewStoreFromBytesWithFormat allows loading from embedded YAML or JSON or remote fetch
+func NewStoreFromBytesWithFormat(data []byte, format string) (*Store, error) <span class="cov10" title="18">{
+        var parsed struct {
+                Flags map[string]Flag `json:"flags"`
+        }
+        switch format </span>{
+        case "yaml":<span class="cov3" title="2">
+                if err := yaml.Unmarshal(data, &amp;parsed); err != nil </span><span class="cov0" title="0">{
+                        return nil, fmt.Errorf("parse YAML: %w", err)
+                }</span>
+        default:<span class="cov9" title="16">
+                if err := json.Unmarshal(data, &amp;parsed); err != nil </span><span class="cov4" title="3">{
+                        return nil, fmt.Errorf("parse JSON: %w", err)
+                }</span>
+        }
+        <span class="cov9" title="15">return &amp;Store{flags: parsed.Flags}, nil</span>
+}
+
+func DetectFormat(path string) string <span class="cov9" title="14">{
+        ext := strings.ToLower(filepath.Ext(path))
+        switch ext </span>{
+        case ".yaml", ".yml":<span class="cov3" title="2">
+                return "yaml"</span>
+        default:<span class="cov8" title="12">
+                return "json"</span>
+        }
+}
+</pre>
+		
+		<pre class="file" id="file6" style="display: none">package sdk
+
+import (
+        "fmt"
+        "path/filepath"
+        "sync"
+        "time"
+
+        "github.com/fsnotify/fsnotify"
+)
+
+// FileWatchingStore wraps Store and reloads it when the underlying file changes.
+type FileWatchingStore struct {
+        mu     sync.RWMutex
+        store  *Store
+        path   string
+        events chan struct{}
+        errors chan error
+        done   chan struct{}
+}
+
+// NewFileWatchingStore creates a FileWatchingStore that watches the given file.
+func NewFileWatchingStore(path string) (*FileWatchingStore, error) <span class="cov5" title="4">{
+        absPath, err := filepath.Abs(path)
+        if err != nil </span><span class="cov0" title="0">{
+                return nil, err
+        }</span>
+        <span class="cov5" title="4">s := &amp;FileWatchingStore{
+                path:   absPath,
+                events: make(chan struct{}, 1),
+                errors: make(chan error, 1),
+                done:   make(chan struct{}),
+        }
+
+        store, err := NewStoreFromFile(absPath)
+        if err != nil </span><span class="cov0" title="0">{
+                return nil, err
+        }</span>
+        <span class="cov5" title="4">s.store = store
+
+        go s.watch()
+        return s, nil</span>
+}
+
+func (s *FileWatchingStore) watch() <span class="cov5" title="4">{
+        watcher, err := fsnotify.NewWatcher()
+        if err != nil </span><span class="cov0" title="0">{
+                s.errors &lt;- fmt.Errorf("watcher init failed: %w", err)
+                return
+        }</span>
+        
+        //goland:noinspection GoUnhandledErrorResult
+        <span class="cov5" title="4">defer watcher.Close()
+
+        dir := s.watchDir()
+        if err := watcher.Add(dir); err != nil </span><span class="cov0" title="0">{
+                s.errors &lt;- fmt.Errorf("watch add failed: %w", err)
+                return
+        }</span>
+
+        <span class="cov5" title="4">for </span><span class="cov10" title="16">{
+                select </span>{
+                case &lt;-s.done:<span class="cov3" title="2">
+                        return</span>
+                case evt := &lt;-watcher.Events:<span class="cov9" title="12">
+                        evtPath := filepath.Clean(evt.Name)
+                        watchPath := filepath.Clean(s.path)
+
+                        if evtPath == watchPath &amp;&amp;
+                                evt.Op&amp;(fsnotify.Write|fsnotify.Create|fsnotify.Rename) != 0 </span><span class="cov3" title="2">{
+                                s.reload()
+                        }</span>
+                case err := &lt;-watcher.Errors:<span class="cov0" title="0">
+                        s.errors &lt;- err</span>
+                }
+        }
+}
+
+func (s *FileWatchingStore) watchDir() string <span class="cov5" title="4">{
+        return filepath.Dir(s.path)
+}</span>
+
+func (s *FileWatchingStore) reload() <span class="cov3" title="2">{
+        time.Sleep(50 * time.Millisecond) // debounce file locks
+        store, err := NewStoreFromFile(s.path)
+        if err != nil </span><span class="cov1" title="1">{
+                s.errors &lt;- fmt.Errorf("reload failed: %w", err)
+                return
+        }</span>
+
+        <span class="cov1" title="1">s.mu.Lock()
+        s.store = store
+        s.mu.Unlock()
+
+        select </span>{
+        case s.events &lt;- struct{}{}:<span class="cov1" title="1"></span>
+        default:<span class="cov0" title="0"></span>
+        }
+}
+
+// IsEnabled implements the Store interface.
+func (s *FileWatchingStore) IsEnabled(key string, ctx EvalContext) bool <span class="cov5" title="4">{
+        s.mu.RLock()
+        defer s.mu.RUnlock()
+        return s.store.IsEnabled(key, ctx)
+}</span>
+
+func (s *FileWatchingStore) AllFlags() map[string]Flag <span class="cov0" title="0">{
+        s.mu.RLock()
+        defer s.mu.RUnlock()
+        return s.store.AllFlags()
+}</span>
+
+func (s *FileWatchingStore) Close() <span class="cov3" title="2">{
+        close(s.done)
+}</span>
+
+// Events exposes reload notifications (optional).
+func (s *FileWatchingStore) Events() &lt;-chan struct{} <span class="cov1" title="1">{
+        return s.events
+}</span>
+
+// Errors exposes watcher errors (optional).
+func (s *FileWatchingStore) Errors() &lt;-chan error <span class="cov1" title="1">{
+        return s.errors
+}</span>
+</pre>
+		
+		<pre class="file" id="file7" style="display: none">package sdk
 
 // Flag represents a single feature flag definition
 type Flag struct {
@@ -373,49 +552,70 @@ func ruleMatches(conditions map[string]string, ctx EvalContext, rule Rule) bool 
 }
 </pre>
 		
-		<pre class="file" id="file6" style="display: none">package sdk
+		<pre class="file" id="file8" style="display: none">package sdk
 
 import (
+        "errors"
         "fmt"
         "io"
         "net/http"
+        "time"
 )
+
+type URLStoreOption func(r *http.Request)
+
+var NotModifiedError = errors.New("not modified")
+
+// SetLastModified is an URLStoreOption for setting a last modified date, which can result in a 304
+func SetLastModified(modTime time.Time) URLStoreOption <span class="cov7" title="3">{
+        return func(r *http.Request) </span><span class="cov7" title="3">{
+                r.Header.Set("If-Modified-Since", modTime.Format(http.TimeFormat))
+        }</span>
+}
 
 // NewStoreFromURL loads a flag file from an HTTP(S) endpoint.
 // It auto-detects JSON or YAML based on the file extension.
-func NewStoreFromURL(url string, token string) (*Store, error) <span class="cov10" title="2">{
+func NewStoreFromURL(url string, token string, options ...URLStoreOption) (*Store, error) <span class="cov10" title="5">{
         req, err := http.NewRequest("GET", url, nil)
         if err != nil </span><span class="cov0" title="0">{
                 return nil, fmt.Errorf("build request: %w", err)
         }</span>
 
-        <span class="cov10" title="2">if token != "" </span><span class="cov1" title="1">{
+        <span class="cov10" title="5">if token != "" </span><span class="cov8" title="4">{
                 req.Header.Set("Authorization", "Bearer "+token)
         }</span>
 
-        <span class="cov10" title="2">resp, err := http.DefaultClient.Do(req)
+        // Apply our extended options
+        <span class="cov10" title="5">for _, opt := range options </span><span class="cov7" title="3">{
+                opt(req)
+        }</span>
+
+        <span class="cov10" title="5">resp, err := http.DefaultClient.Do(req)
         if err != nil </span><span class="cov0" title="0">{
                 return nil, fmt.Errorf("fetch flags: %w", err)
         }</span>
 
         //goland:noinspection GoUnhandledErrorResult
-        <span class="cov10" title="2">defer resp.Body.Close()
+        <span class="cov10" title="5">defer resp.Body.Close()
 
-        if resp.StatusCode &gt;= 400 </span><span class="cov0" title="0">{
+        // Not modified since last request
+        if resp.StatusCode == http.StatusNotModified </span><span class="cov1" title="1">{
+                return nil, NotModifiedError
+        }</span>
+
+        <span class="cov8" title="4">if resp.StatusCode &gt;= 400 </span><span class="cov1" title="1">{
                 return nil, fmt.Errorf("server error: %s", resp.Status)
         }</span>
 
-        <span class="cov10" title="2">body, err := io.ReadAll(resp.Body)
-        if err != nil </span><span class="cov0" title="0">{
-                return nil, fmt.Errorf("read response: %w", err)
-        }</span>
+        // error will come out further down anyway (and is easier to test)
+        <span class="cov7" title="3">body, _ := io.ReadAll(resp.Body)
 
-        <span class="cov10" title="2">format := detectFormat(url)
+        format := DetectFormat(url)
         return NewStoreFromBytesWithFormat(body, format)</span>
 }
 </pre>
 		
-		<pre class="file" id="file7" style="display: none">package sdk
+		<pre class="file" id="file9" style="display: none">package sdk
 
 import (
         "crypto/sha256"
@@ -452,17 +652,7 @@ func hashToPercent(value, algo string) int <span class="cov10" title="1003">{
 }
 </pre>
 		
-		<pre class="file" id="file8" style="display: none">package sdk
-
-import (
-        "encoding/json"
-        "fmt"
-        "os"
-        "path/filepath"
-        "strings"
-
-        "gopkg.in/yaml.v3"
-)
+		<pre class="file" id="file10" style="display: none">package sdk
 
 // Store holds the loaded feature flags
 type Store struct {
@@ -472,43 +662,6 @@ type Store struct {
 func NewStore(flags map[string]Flag) *Store <span class="cov0" title="0">{
         return &amp;Store{flags: flags}
 }</span>
-
-// NewStoreFromFile loads flags from a JSON file into memory
-func NewStoreFromFile(path string) (*Store, error) <span class="cov8" title="13">{
-        data, err := os.ReadFile(path)
-        if err != nil </span><span class="cov3" title="2">{
-                return nil, fmt.Errorf("read flag file: %w", err)
-        }</span>
-        <span class="cov8" title="11">return NewStoreFromBytesWithFormat(data, detectFormat(path))</span>
-}
-
-func detectFormat(path string) string <span class="cov8" title="13">{
-        ext := strings.ToLower(filepath.Ext(path))
-        switch ext </span>{
-        case ".yaml", ".yml":<span class="cov3" title="2">
-                return "yaml"</span>
-        default:<span class="cov8" title="11">
-                return "json"</span>
-        }
-}
-
-// NewStoreFromBytesWithFormat allows loading from embedded YAML or JSON or remote fetch
-func NewStoreFromBytesWithFormat(data []byte, format string) (*Store, error) <span class="cov9" title="17">{
-        var parsed struct {
-                Flags map[string]Flag `json:"flags"`
-        }
-        switch format </span>{
-        case "yaml":<span class="cov3" title="2">
-                if err := yaml.Unmarshal(data, &amp;parsed); err != nil </span><span class="cov0" title="0">{
-                        return nil, fmt.Errorf("parse YAML: %w", err)
-                }</span>
-        default:<span class="cov9" title="15">
-                if err := json.Unmarshal(data, &amp;parsed); err != nil </span><span class="cov3" title="2">{
-                        return nil, fmt.Errorf("parse JSON: %w", err)
-                }</span>
-        }
-        <span class="cov9" title="15">return &amp;Store{flags: parsed.Flags}, nil</span>
-}
 
 // Evaluate supports rule-based matching
 func (s *Store) Evaluate(key string, ctx EvalContext) bool <span class="cov10" title="20">{
@@ -527,132 +680,6 @@ func (s *Store) IsEnabled(key string, ctx EvalContext) bool <span class="cov9" t
 // AllFlags returns the raw flag map
 func (s *Store) AllFlags() map[string]Flag <span class="cov3" title="2">{
         return s.flags
-}</span>
-</pre>
-		
-		<pre class="file" id="file9" style="display: none">package sdk
-
-import (
-        "fmt"
-        "path/filepath"
-        "sync"
-        "time"
-
-        "github.com/fsnotify/fsnotify"
-)
-
-// WatchingStore wraps Store and reloads it when the underlying file changes.
-type WatchingStore struct {
-        mu     sync.RWMutex
-        store  *Store
-        path   string
-        events chan struct{}
-        errors chan error
-        done   chan struct{}
-}
-
-// NewWatchingStore creates a WatchingStore that watches the given file.
-func NewWatchingStore(path string) (*WatchingStore, error) <span class="cov5" title="4">{
-        absPath, err := filepath.Abs(path)
-        if err != nil </span><span class="cov0" title="0">{
-                return nil, err
-        }</span>
-        <span class="cov5" title="4">s := &amp;WatchingStore{
-                path:   absPath,
-                events: make(chan struct{}, 1),
-                errors: make(chan error, 1),
-                done:   make(chan struct{}),
-        }
-
-        store, err := NewStoreFromFile(absPath)
-        if err != nil </span><span class="cov0" title="0">{
-                return nil, err
-        }</span>
-        <span class="cov5" title="4">s.store = store
-
-        go s.watch()
-        return s, nil</span>
-}
-
-func (s *WatchingStore) watch() <span class="cov5" title="4">{
-        watcher, err := fsnotify.NewWatcher()
-        if err != nil </span><span class="cov0" title="0">{
-                s.errors &lt;- fmt.Errorf("watcher init failed: %w", err)
-                return
-        }</span>
-        <span class="cov5" title="4">defer watcher.Close()
-
-        dir := s.watchDir()
-        if err := watcher.Add(dir); err != nil </span><span class="cov0" title="0">{
-                s.errors &lt;- fmt.Errorf("watch add failed: %w", err)
-                return
-        }</span>
-
-        <span class="cov5" title="4">for </span><span class="cov10" title="16">{
-                select </span>{
-                case &lt;-s.done:<span class="cov3" title="2">
-                        return</span>
-                case evt := &lt;-watcher.Events:<span class="cov9" title="12">
-                        evtPath := filepath.Clean(evt.Name)
-                        watchPath := filepath.Clean(s.path)
-
-                        if evtPath == watchPath &amp;&amp;
-                                evt.Op&amp;(fsnotify.Write|fsnotify.Create|fsnotify.Rename) != 0 </span><span class="cov3" title="2">{
-                                s.reload()
-                        }</span>
-                case err := &lt;-watcher.Errors:<span class="cov0" title="0">
-                        s.errors &lt;- err</span>
-                }
-        }
-}
-
-func (s *WatchingStore) watchDir() string <span class="cov5" title="4">{
-        return filepath.Dir(s.path)
-}</span>
-
-func (s *WatchingStore) reload() <span class="cov3" title="2">{
-        time.Sleep(50 * time.Millisecond) // debounce file locks
-        store, err := NewStoreFromFile(s.path)
-        if err != nil </span><span class="cov1" title="1">{
-                s.errors &lt;- fmt.Errorf("reload failed: %w", err)
-                return
-        }</span>
-
-        <span class="cov1" title="1">s.mu.Lock()
-        s.store = store
-        s.mu.Unlock()
-
-        select </span>{
-        case s.events &lt;- struct{}{}:<span class="cov1" title="1"></span>
-        default:<span class="cov0" title="0"></span>
-        }
-}
-
-// IsEnabled implements the Store interface.
-func (s *WatchingStore) IsEnabled(key string, ctx EvalContext) bool <span class="cov5" title="4">{
-        s.mu.RLock()
-        defer s.mu.RUnlock()
-        return s.store.IsEnabled(key, ctx)
-}</span>
-
-func (s *WatchingStore) AllFlags() map[string]Flag <span class="cov0" title="0">{
-        s.mu.RLock()
-        defer s.mu.RUnlock()
-        return s.store.AllFlags()
-}</span>
-
-func (s *WatchingStore) Close() <span class="cov3" title="2">{
-        close(s.done)
-}</span>
-
-// Events exposes reload notifications (optional).
-func (s *WatchingStore) Events() &lt;-chan struct{} <span class="cov1" title="1">{
-        return s.events
-}</span>
-
-// Errors exposes watcher errors (optional).
-func (s *WatchingStore) Errors() &lt;-chan error <span class="cov1" title="1">{
-        return s.errors
 }</span>
 </pre>
 		

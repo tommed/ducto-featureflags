@@ -71,7 +71,7 @@
 				
 				<option value="file7">github.com/tommed/ducto-featureflags/sdk/hash.go (100.0%)</option>
 				
-				<option value="file8">github.com/tommed/ducto-featureflags/sdk/store.go (95.2%)</option>
+				<option value="file8">github.com/tommed/ducto-featureflags/sdk/store.go (90.9%)</option>
 				
 				<option value="file9">github.com/tommed/ducto-featureflags/sdk/watch.go (78.3%)</option>
 				
@@ -468,6 +468,10 @@ import (
 type Store struct {
         flags map[string]Flag
 }
+
+func NewStore(flags map[string]Flag) *Store <span class="cov0" title="0">{
+        return &amp;Store{flags: flags}
+}</span>
 
 // NewStoreFromFile loads flags from a JSON file into memory
 func NewStoreFromFile(path string) (*Store, error) <span class="cov8" title="13">{

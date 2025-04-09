@@ -9,8 +9,8 @@ import (
 	"github.com/fsnotify/fsnotify"
 )
 
-// WatchingStore wraps Store and reloads it when the underlying file changes.
-type WatchingStore struct {
+// FileWatchingStore wraps Store and reloads it when the underlying file changes.
+type FileWatchingStore struct {
 	mu     sync.RWMutex
 	store  *Store
 	path   string
@@ -19,13 +19,13 @@ type WatchingStore struct {
 	done   chan struct{}
 }
 
-// NewWatchingStore creates a WatchingStore that watches the given file.
-func NewWatchingStore(path string) (*WatchingStore, error) {
+// NewFileWatchingStore creates a FileWatchingStore that watches the given file.
+func NewFileWatchingStore(path string) (*FileWatchingStore, error) {
 	absPath, err := filepath.Abs(path)
 	if err != nil {
 		return nil, err
 	}
-	s := &WatchingStore{
+	s := &FileWatchingStore{
 		path:   absPath,
 		events: make(chan struct{}, 1),
 		errors: make(chan error, 1),
@@ -42,12 +42,14 @@ func NewWatchingStore(path string) (*WatchingStore, error) {
 	return s, nil
 }
 
-func (s *WatchingStore) watch() {
+func (s *FileWatchingStore) watch() {
 	watcher, err := fsnotify.NewWatcher()
 	if err != nil {
 		s.errors <- fmt.Errorf("watcher init failed: %w", err)
 		return
 	}
+	
+	//goland:noinspection GoUnhandledErrorResult
 	defer watcher.Close()
 
 	dir := s.watchDir()
@@ -74,11 +76,11 @@ func (s *WatchingStore) watch() {
 	}
 }
 
-func (s *WatchingStore) watchDir() string {
+func (s *FileWatchingStore) watchDir() string {
 	return filepath.Dir(s.path)
 }
 
-func (s *WatchingStore) reload() {
+func (s *FileWatchingStore) reload() {
 	time.Sleep(50 * time.Millisecond) // debounce file locks
 	store, err := NewStoreFromFile(s.path)
 	if err != nil {
@@ -97,28 +99,28 @@ func (s *WatchingStore) reload() {
 }
 
 // IsEnabled implements the Store interface.
-func (s *WatchingStore) IsEnabled(key string, ctx EvalContext) bool {
+func (s *FileWatchingStore) IsEnabled(key string, ctx EvalContext) bool {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	return s.store.IsEnabled(key, ctx)
 }
 
-func (s *WatchingStore) AllFlags() map[string]Flag {
+func (s *FileWatchingStore) AllFlags() map[string]Flag {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	return s.store.AllFlags()
 }
 
-func (s *WatchingStore) Close() {
+func (s *FileWatchingStore) Close() {
 	close(s.done)
 }
 
 // Events exposes reload notifications (optional).
-func (s *WatchingStore) Events() <-chan struct{} {
+func (s *FileWatchingStore) Events() <-chan struct{} {
 	return s.events
 }
 
 // Errors exposes watcher errors (optional).
-func (s *WatchingStore) Errors() <-chan error {
+func (s *FileWatchingStore) Errors() <-chan error {
 	return s.errors
 }

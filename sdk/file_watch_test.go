@@ -42,7 +42,7 @@ func TestWatchingStore_ReloadsOnChange(t *testing.T) {
 		}
 	}`)
 
-	store, err := NewWatchingStore(file)
+	store, err := NewFileWatchingStore(file)
 	assert.NoError(t, err)
 	defer store.Close()
 
@@ -87,7 +87,7 @@ func TestWatchingStore_HandlesBadFileGracefully(t *testing.T) {
 		}
 	}`)
 
-	store, err := NewWatchingStore(file)
+	store, err := NewFileWatchingStore(file)
 	assert.NoError(t, err)
 	defer store.Close()
 

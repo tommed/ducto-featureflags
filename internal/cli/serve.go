@@ -5,10 +5,12 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
+	"gopkg.in/yaml.v3"
 	"io"
 	"net/http"
 	"os"
 	"os/signal"
+	"time"
 
 	"github.com/tommed/ducto-featureflags/sdk"
 )
@@ -41,34 +43,53 @@ func Serve(args []string, stdout, stderr io.Writer) int {
 	}
 
 	mux := http.NewServeMux()
-	mux.HandleFunc("/api/flags", func(w http.ResponseWriter, r *http.Request) {
-		if token != "" {
-			auth := r.Header.Get("Authorization")
-			expected := "Bearer " + token
-			if auth != expected {
-				http.Error(w, "unauthorized", http.StatusUnauthorized)
-				return
-			}
-		}
-
-		key := r.URL.Query().Get("key")
-		if key != "" {
-			// Convert query params to EvalContext
-			ctx := sdk.EvalContext{}
-			for k, v := range r.URL.Query() {
-				if len(v) > 0 {
-					ctx[k] = v[0]
+	var handler = func(encode func(w http.ResponseWriter, graph interface{})) http.HandlerFunc {
+		return func(w http.ResponseWriter, r *http.Request) {
+			if token != "" {
+				auth := r.Header.Get("Authorization")
+				expected := "Bearer " + token
+				if auth != expected {
+					http.Error(w, "unauthorized", http.StatusUnauthorized)
+					return
 				}
 			}
-			// Now fetch the flag value
-			result := store.IsEnabled(key, ctx)
-			_ = json.NewEncoder(w).Encode(map[string]bool{"enabled": result})
-			return
-		}
 
-		// Just list all flags
-		_ = json.NewEncoder(w).Encode(store.AllFlags())
-	})
+			// Handle If-Modified-Since and 304s
+			ifModified := r.Header.Get("If-Modified-Since")
+			if ifModified != "" {
+				if t, err := http.ParseTime(ifModified); err == nil {
+					if !store.LastUpdated().IsZero() && store.LastUpdated().Before(t.Add(1*time.Second)) {
+						w.WriteHeader(http.StatusNotModified)
+						return
+					}
+				}
+			}
+			w.Header().Set("Last-Modified", store.LastUpdated().UTC().Format(http.TimeFormat))
+
+			// Fetch the eval context from the query-string
+			key := r.URL.Query().Get("key")
+			if key != "" {
+				// Convert query params to EvalContext
+				ctx := sdk.EvalContext{}
+				for k, v := range r.URL.Query() {
+					if len(v) > 0 {
+						ctx[k] = v[0]
+					}
+				}
+
+				// Determine what to send back
+				result := store.IsEnabled(key, ctx)
+				encode(w, map[string]bool{"enabled": result})
+				return
+			}
+
+			// Just list all flags
+			encode(w, store.AllFlags())
+		}
+	}
+	mux.HandleFunc("/api/flags", handler(handleJSON))
+	mux.HandleFunc("/api/flags.yaml", handler(handleYAML))
+	mux.HandleFunc("/api/flags.json", handler(handleJSON))
 
 	server := &http.Server{
 		Addr:    addr,
@@ -82,4 +103,12 @@ func Serve(args []string, stdout, stderr io.Writer) int {
 	}
 
 	return 0
+}
+
+func handleJSON(w http.ResponseWriter, graph interface{}) {
+	_ = json.NewEncoder(w).Encode(graph)
+}
+
+func handleYAML(w http.ResponseWriter, graph interface{}) {
+	_ = yaml.NewEncoder(w).Encode(graph)
 }

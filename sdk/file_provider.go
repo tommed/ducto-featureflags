@@ -3,7 +3,9 @@ package sdk
 import (
 	"context"
 	"fmt"
+	"io"
 	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 
@@ -11,7 +13,11 @@ import (
 )
 
 func NewFileProvider(path string) StoreProvider {
-	return &fileProvider{path: path}
+	return NewFileProviderWithLog(path, nil)
+}
+
+func NewFileProviderWithLog(path string, writer io.Writer) StoreProvider {
+	return &fileProvider{path: path, writer: writer}
 }
 
 // fileProvider implements StoreProvider by watching a file on disk.
@@ -19,6 +25,13 @@ type fileProvider struct {
 	path     string
 	last     *Store
 	lastLock sync.RWMutex
+	writer   io.Writer
+}
+
+func (f *fileProvider) logEvent(format string, args ...any) {
+	if f.writer != nil {
+		_, _ = f.writer.Write([]byte(strings.TrimSpace(fmt.Sprintf(format, args...)) + "\n"))
+	}
 }
 
 // Load loads the current store from disk.
@@ -35,6 +48,7 @@ func (f *fileProvider) Load(_ context.Context) (*Store, error) {
 	f.lastLock.Lock()
 	f.last = store
 	f.lastLock.Unlock()
+	f.logEvent("Store updated")
 
 	return store, nil
 }
@@ -71,7 +85,7 @@ func (f *fileProvider) Watch(ctx context.Context, onChange func(*Store)) {
 				}
 			}
 		case err := <-watcher.Errors:
-			fmt.Printf("file watcher error: %v\n", err) // could expose as metric/log
+			f.logEvent("error watching file: %v", err)
 		}
 	}
 }

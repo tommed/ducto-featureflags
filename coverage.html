@@ -63,11 +63,11 @@
 				
 				<option value="file3">github.com/tommed/ducto-featureflags/internal/cli/runner.go (100.0%)</option>
 				
-				<option value="file4">github.com/tommed/ducto-featureflags/internal/cli/serve.go (81.8%)</option>
+				<option value="file4">github.com/tommed/ducto-featureflags/internal/cli/serve.go (83.6%)</option>
 				
 				<option value="file5">github.com/tommed/ducto-featureflags/sdk/file.go (93.3%)</option>
 				
-				<option value="file6">github.com/tommed/ducto-featureflags/sdk/file_provider.go (87.5%)</option>
+				<option value="file6">github.com/tommed/ducto-featureflags/sdk/file_provider.go (88.9%)</option>
 				
 				<option value="file7">github.com/tommed/ducto-featureflags/sdk/flags.go (84.0%)</option>
 				
@@ -234,13 +234,14 @@ func dumpAllFlags(stdout io.Writer, store *sdk.Store) <span class="cov1" title="
 import (
         "context"
         "encoding/json"
+        "errors"
         "flag"
         "fmt"
         "gopkg.in/yaml.v3"
         "io"
         "net/http"
-        "os"
         "os/signal"
+        "syscall"
         "time"
 
         "github.com/tommed/ducto-featureflags/sdk"
@@ -249,8 +250,6 @@ import (
 //goland:noinspection GoUnhandledErrorResult
 func Serve(args []string, stdout, stderr io.Writer) int <span class="cov6" title="4">{
         fs := flag.NewFlagSet("serve", flag.ExitOnError)
-        ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, os.Kill)
-        defer cancel()
 
         var file string
         var addr string
@@ -265,7 +264,8 @@ func Serve(args []string, stdout, stderr io.Writer) int <span class="cov6" title
                 return 1
         }</span>
 
-        <span class="cov6" title="4">provider := sdk.NewFileProvider(file)
+        <span class="cov6" title="4">ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
+        provider := sdk.NewFileProviderWithLog(file, stdout)
         store := sdk.NewDynamicStore(ctx, provider)
         err := store.Start()
         if err != nil </span><span class="cov0" title="0">{
@@ -326,18 +326,27 @@ func Serve(args []string, stdout, stderr io.Writer) int <span class="cov6" title
                 Addr:    addr,
                 Handler: mux,
         }
+        go func() </span><span class="cov6" title="4">{
+                &lt;-ctx.Done()
+                _ = server.Shutdown(context.Background())
+                stop()
+        }</span>()
 
-        fmt.Fprintf(stdout, "Listening on %s...\n", addr)
+        <span class="cov6" title="4">fmt.Fprintf(stdout, "Listening on %s...\n", addr)
         if err := server.ListenAndServe(); err != nil </span><span class="cov3" title="2">{
-                fmt.Fprintf(stderr, "server failed: %v", err)
-                return 1
-        }</span>
+                if !errors.Is(err, http.ErrServerClosed) </span><span class="cov3" title="2">{
+                        fmt.Fprintf(stderr, "server failed: %v", err)
+                        return 1
+                }</span>
+        }
 
         <span class="cov0" title="0">return 0</span>
 }
 
 func handleJSON(w http.ResponseWriter, graph interface{}) <span class="cov4" title="3">{
-        _ = json.NewEncoder(w).Encode(graph)
+        e := json.NewEncoder(w)
+        e.SetIndent("", "  ")
+        _ = e.Encode(graph)
 }</span>
 
 func handleYAML(w http.ResponseWriter, graph interface{}) <span class="cov1" title="1">{
@@ -397,15 +406,21 @@ func DetectFormat(path string) string <span class="cov9" title="22">{
 import (
         "context"
         "fmt"
+        "io"
         "path/filepath"
+        "strings"
         "sync"
         "time"
 
         "github.com/fsnotify/fsnotify"
 )
 
-func NewFileProvider(path string) StoreProvider <span class="cov6" title="6">{
-        return &amp;fileProvider{path: path}
+func NewFileProvider(path string) StoreProvider <span class="cov3" title="2">{
+        return NewFileProviderWithLog(path, nil)
+}</span>
+
+func NewFileProviderWithLog(path string, writer io.Writer) StoreProvider <span class="cov6" title="6">{
+        return &amp;fileProvider{path: path, writer: writer}
 }</span>
 
 // fileProvider implements StoreProvider by watching a file on disk.
@@ -413,6 +428,13 @@ type fileProvider struct {
         path     string
         last     *Store
         lastLock sync.RWMutex
+        writer   io.Writer
+}
+
+func (f *fileProvider) logEvent(format string, args ...any) <span class="cov6" title="7">{
+        if f.writer != nil </span><span class="cov5" title="4">{
+                _, _ = f.writer.Write([]byte(strings.TrimSpace(fmt.Sprintf(format, args...)) + "\n"))
+        }</span>
 }
 
 // Load loads the current store from disk.
@@ -426,9 +448,10 @@ func (f *fileProvider) Load(_ context.Context) (*Store, error) <span class="cov7
                 return nil, err
         }</span>
 
-        <span class="cov7" title="7">f.lastLock.Lock()
+        <span class="cov6" title="7">f.lastLock.Lock()
         f.last = store
         f.lastLock.Unlock()
+        f.logEvent("Store updated")
 
         return store, nil</span>
 }
@@ -448,16 +471,16 @@ func (f *fileProvider) Watch(ctx context.Context, onChange func(*Store)) <span c
         <span class="cov6" title="6">defer watcher.Close()
         _ = watcher.Add(dir)
 
-        for </span><span class="cov10" title="18">{
+        for </span><span class="cov10" title="22">{
                 select </span>{
-                case &lt;-ctx.Done():<span class="cov5" title="4">
+                case &lt;-ctx.Done():<span class="cov3" title="2">
                         return</span>
-                case evt := &lt;-watcher.Events:<span class="cov8" title="12">
+                case evt := &lt;-watcher.Events:<span class="cov9" title="16">
                         evtPath := filepath.Clean(evt.Name)
-                        if evtPath != absPath </span><span class="cov7" title="8">{
+                        if evtPath != absPath </span><span class="cov7" title="10">{
                                 continue</span>
                         }
-                        <span class="cov5" title="4">if evt.Op&amp;(fsnotify.Write|fsnotify.Create|fsnotify.Rename) != 0 </span><span class="cov3" title="2">{
+                        <span class="cov6" title="6">if evt.Op&amp;(fsnotify.Write|fsnotify.Create|fsnotify.Rename) != 0 </span><span class="cov3" title="2">{
                                 time.Sleep(50 * time.Millisecond) // debounce
                                 store, err := f.Load(ctx)
                                 if err == nil </span><span class="cov1" title="1">{
@@ -465,7 +488,7 @@ func (f *fileProvider) Watch(ctx context.Context, onChange func(*Store)) <span c
                                 }</span>
                         }
                 case err := &lt;-watcher.Errors:<span class="cov0" title="0">
-                        fmt.Printf("file watcher error: %v\n", err)</span> // could expose as metric/log
+                        f.logEvent("error watching file: %v", err)</span>
                 }
         }
 }

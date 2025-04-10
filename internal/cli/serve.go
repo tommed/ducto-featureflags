@@ -3,13 +3,14 @@ package cli
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"flag"
 	"fmt"
 	"gopkg.in/yaml.v3"
 	"io"
 	"net/http"
-	"os"
 	"os/signal"
+	"syscall"
 	"time"
 
 	"github.com/tommed/ducto-featureflags/sdk"
@@ -18,8 +19,6 @@ import (
 //goland:noinspection GoUnhandledErrorResult
 func Serve(args []string, stdout, stderr io.Writer) int {
 	fs := flag.NewFlagSet("serve", flag.ExitOnError)
-	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, os.Kill)
-	defer cancel()
 
 	var file string
 	var addr string
@@ -34,7 +33,8 @@ func Serve(args []string, stdout, stderr io.Writer) int {
 		return 1
 	}
 
-	provider := sdk.NewFileProvider(file)
+	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
+	provider := sdk.NewFileProviderWithLog(file, stdout)
 	store := sdk.NewDynamicStore(ctx, provider)
 	err := store.Start()
 	if err != nil {
@@ -95,18 +95,27 @@ func Serve(args []string, stdout, stderr io.Writer) int {
 		Addr:    addr,
 		Handler: mux,
 	}
+	go func() {
+		<-ctx.Done()
+		_ = server.Shutdown(context.Background())
+		stop()
+	}()
 
 	fmt.Fprintf(stdout, "Listening on %s...\n", addr)
 	if err := server.ListenAndServe(); err != nil {
-		fmt.Fprintf(stderr, "server failed: %v", err)
-		return 1
+		if !errors.Is(err, http.ErrServerClosed) {
+			fmt.Fprintf(stderr, "server failed: %v", err)
+			return 1
+		}
 	}
 
 	return 0
 }
 
 func handleJSON(w http.ResponseWriter, graph interface{}) {
-	_ = json.NewEncoder(w).Encode(graph)
+	e := json.NewEncoder(w)
+	e.SetIndent("", "  ")
+	_ = e.Encode(graph)
 }
 
 func handleYAML(w http.ResponseWriter, graph interface{}) {

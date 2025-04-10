@@ -61,13 +61,11 @@ func TestFlagEvaluation_WithRules(t *testing.T) {
 
 func TestStoreEvaluate(t *testing.T) {
 	store, err := NewStoreFromBytesWithFormat([]byte(`{
-		"flags": {
-			"new_ui": {
-				"rules": [
-					{ "if": { "env": "prod" }, "value": true }
-				],
-				"enabled": false
-			}
+		"new_ui": {
+			"rules": [
+				{ "if": { "env": "prod" }, "value": true }
+			],
+			"enabled": false
 		}
 	}`), "json")
 	assert.NoError(t, err)

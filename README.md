@@ -41,21 +41,18 @@ It supports both static file-based flags and dynamic backends (coming soon), and
 The simplest possible flag file is static like so:
 ```json
 {
-  "flags": {
     "new_ui": {
       "enabled": true
     },
     "beta_mode": {
       "enabled": false
     }
-  }
 }
 ```
 
 To make this more dynamic, you can add rules based on an `EvalContext`:
 ```json
 {
-  "flags": {
     "new_ui": {
       "rules": [
         { "if": { "env": "prod", "group": "beta" }, "value": true },
@@ -63,7 +60,6 @@ To make this more dynamic, you can add rules based on an `EvalContext`:
       ],
       "enabled": true
     }
-  }
 }
 ```
 

@@ -10,10 +10,8 @@ import (
 
 func TestNewStoreFromBytes(t *testing.T) {
 	input := []byte(`{
-		"flags": {
-			"feature_a": { "enabled": true },
-			"feature_b": { "enabled": false }
-		}
+		"feature_a": { "enabled": true },
+		"feature_b": { "enabled": false }
 	}`)
 
 	store, err := NewStoreFromBytesWithFormat(input, "json")
@@ -37,9 +35,7 @@ func TestNewStoreFromFile(t *testing.T) {
 	file := tmp + "/flags.json"
 
 	err := os.WriteFile(file, []byte(`{
-		"flags": {
-			"dark_mode": { "enabled": true }
-		}
+		"dark_mode": { "enabled": true }
 	}`), 0644)
 	assert.NoError(t, err)
 
@@ -55,10 +51,8 @@ func TestNewStoreFromFile_BadFile(t *testing.T) {
 
 func TestAllFlags(t *testing.T) {
 	store, err := NewStoreFromBytesWithFormat([]byte(`{
-		"flags": {
-			"x": { "enabled": true },
-			"y": { "enabled": false }
-		}
+		"x": { "enabled": true },
+		"y": { "enabled": false }
 	}`), "json")
 	require.NoError(t, err)
 

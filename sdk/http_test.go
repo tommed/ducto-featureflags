@@ -14,10 +14,8 @@ func TestNewStoreFromURL_JSON(t *testing.T) {
 		"env": "prod",
 	}
 	payload := `{
-		"flags": {
-			"new_ui": {
-				"enabled": true
-			}
+		"new_ui": {
+			"enabled": true
 		}
 	}`
 
@@ -75,13 +73,12 @@ func TestNewStoreFromURL_Errors(t *testing.T) {
 
 func TestNewStoreFromURL_YAML(t *testing.T) {
 	payload := `
-flags:
-  canary:
-    enabled: false
-    rules:
-      - if:
-          env: prod
-        value: true
+canary:
+  enabled: false
+  rules:
+  - if:
+      env: prod
+    value: true
 `
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -94,6 +91,8 @@ flags:
 	store, err := NewStoreFromURL(ctx, srv.URL+"/flags.yaml", "")
 	assert.NoError(t, err)
 
-	assert.True(t, store.IsEnabled("canary", EvalContext{"env": "prod"}))
-	assert.False(t, store.IsEnabled("canary", EvalContext{"env": "dev"}))
+	prodEnabled := store.IsEnabled("canary", EvalContext{"env": "prod"})
+	devEnabled := store.IsEnabled("canary", EvalContext{"env": "dev"})
+	assert.True(t, prodEnabled, "prod")
+	assert.False(t, devEnabled, "dev")
 }

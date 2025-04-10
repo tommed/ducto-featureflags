@@ -72,9 +72,9 @@ func TestStoreEvaluate(t *testing.T) {
 	}`), "json")
 	assert.NoError(t, err)
 
-	assert.True(t, store.Evaluate("new_ui", EvalContext{"env": "prod"}))
-	assert.False(t, store.Evaluate("new_ui", EvalContext{"env": "dev"}))
-	assert.False(t, store.Evaluate("missing", EvalContext{"env": "prod"}))
+	assert.True(t, store.IsEnabled("new_ui", EvalContext{"env": "prod"}))
+	assert.False(t, store.IsEnabled("new_ui", EvalContext{"env": "dev"}))
+	assert.False(t, store.IsEnabled("missing", EvalContext{"env": "prod"}))
 }
 
 func TestFlagEvaluation_FallbackToFalse(t *testing.T) {

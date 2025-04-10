@@ -75,7 +75,7 @@
 				
 				<option value="file9">github.com/tommed/ducto-featureflags/sdk/http_provider.go (91.7%)</option>
 				
-				<option value="file10">github.com/tommed/ducto-featureflags/sdk/store.go (85.7%)</option>
+				<option value="file10">github.com/tommed/ducto-featureflags/sdk/store.go (83.3%)</option>
 				
 				<option value="file11">github.com/tommed/ducto-featureflags/sdk/store_dynamic.go (72.2%)</option>
 				
@@ -421,13 +421,13 @@ func (f *fileProvider) Watch(ctx context.Context, onChange func(*Store)) <span c
         <span class="cov5" title="4">defer watcher.Close()
         _ = watcher.Add(dir)
 
-        for </span><span class="cov10" title="16">{
+        for </span><span class="cov10" title="15">{
                 select </span>{
                 case &lt;-ctx.Done():<span class="cov3" title="2">
                         return</span>
-                case evt := &lt;-watcher.Events:<span class="cov9" title="12">
+                case evt := &lt;-watcher.Events:<span class="cov8" title="11">
                         evtPath := filepath.Clean(evt.Name)
-                        if evtPath != absPath </span><span class="cov6" title="6">{
+                        if evtPath != absPath </span><span class="cov6" title="5">{
                                 continue</span>
                         }
                         <span class="cov6" title="6">if evt.Op&amp;(fsnotify.Write|fsnotify.Create|fsnotify.Rename) != 0 </span><span class="cov3" title="2">{
@@ -480,7 +480,7 @@ func (f Flag) Evaluate(ctx EvalContext) bool <span class="cov10" title="1031">{
 }
 
 func ruleMatches(conditions map[string]string, ctx EvalContext, rule Rule) bool <span class="cov9" title="1020">{
-        for k, v := range conditions </span><span class="cov4" title="19">{
+        for k, v := range conditions </span><span class="cov4" title="18">{
                 if ctx[k] != v </span><span class="cov3" title="9">{
                         return false
                 }</span>
@@ -624,28 +624,28 @@ func (p *httpProvider) Watch(ctx context.Context, onChange func(*Store)) <span c
 		
 		<pre class="file" id="file10" style="display: none">package sdk
 
-// Store holds the loaded feature flags
+type AnyStore interface {
+        IsEnabled(key string, ctx EvalContext) bool
+        AllFlags() map[string]Flag
+}
+
+// Store is a AnyStore which holds the provided flags and never updates.
 type Store struct {
         flags map[string]Flag
 }
 
-func NewStore(flags map[string]Flag) *Store <span class="cov0" title="0">{
+func NewStore(flags map[string]Flag) AnyStore <span class="cov0" title="0">{
         return &amp;Store{flags: flags}
 }</span>
 
-// Evaluate supports rule-based matching
-func (s *Store) Evaluate(key string, ctx EvalContext) bool <span class="cov10" title="24">{
+// IsEnabled returns true if the flag is defined and enabled
+func (s *Store) IsEnabled(key string, ctx EvalContext) bool <span class="cov10" title="24">{
         flag, ok := s.flags[key]
         if !ok </span><span class="cov4" title="3">{
                 return false
         }</span>
         <span class="cov9" title="21">return flag.Evaluate(ctx)</span>
 }
-
-// IsEnabled returns true if the flag is defined and enabled
-func (s *Store) IsEnabled(key string, ctx EvalContext) bool <span class="cov9" title="21">{
-        return s.Evaluate(key, ctx)
-}</span>
 
 // AllFlags returns the raw flag map
 func (s *Store) AllFlags() map[string]Flag <span class="cov2" title="2">{
@@ -666,7 +666,8 @@ type StoreProvider interface {
         Watch(ctx context.Context, onChange func(*Store))
 }
 
-// DynamicStore wraps a StoreProvider and handles live updates to the internal store.
+// DynamicStore is a AnyStore which wraps a StoreProvider and handles live updates to the internal store.
+// You can call it in the same way you call Store, except you need to call Start first.
 type DynamicStore struct {
         mu     sync.RWMutex
         store  *Store

@@ -1,6 +1,7 @@
 package sdk
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"testing"
@@ -32,6 +33,10 @@ func TestWatchingStore_ReloadsOnChange(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skipping test in short mode.")
 	}
+
+	// Assemble
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 	tmp := t.TempDir()
 	file := filepath.Join(tmp, "flags.json")
 
@@ -42,9 +47,10 @@ func TestWatchingStore_ReloadsOnChange(t *testing.T) {
 		}
 	}`)
 
-	store, err := NewFileWatchingStore(file)
+	provider := NewFileProvider(file)
+	store := NewDynamicStore(ctx, provider)
+	err := store.Start()
 	assert.NoError(t, err)
-	defer store.Close()
 
 	// Wait for watcher to be fully registered
 	time.Sleep(200 * time.Millisecond)
@@ -59,18 +65,7 @@ func TestWatchingStore_ReloadsOnChange(t *testing.T) {
 	}`)
 
 	// Wait for reload (polling version)
-	timeout := time.After(3 * time.Second)
-	var seenChange bool
-
-	for !seenChange {
-		select {
-		case <-store.Events():
-			seenChange = true
-		case <-timeout:
-			t.Fatal("timeout waiting for fsnotify reload")
-		}
-	}
-
+	time.Sleep(1 * time.Second)
 	assert.True(t, store.IsEnabled("new_ui", EvalContext{}))
 }
 
@@ -78,6 +73,10 @@ func TestWatchingStore_HandlesBadFileGracefully(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skipping test in short mode.")
 	}
+
+	// Assemble
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 	tmp := t.TempDir()
 	file := filepath.Join(tmp, "flags.json")
 
@@ -87,17 +86,14 @@ func TestWatchingStore_HandlesBadFileGracefully(t *testing.T) {
 		}
 	}`)
 
-	store, err := NewFileWatchingStore(file)
+	provider := NewFileProvider(file)
+	store := NewDynamicStore(ctx, provider)
+	err := store.Start()
 	assert.NoError(t, err)
-	defer store.Close()
 
 	// Break the file
 	writeTestFlags(t, file, `{"flags": BROKEN_JSON`)
 
-	select {
-	case err := <-store.Errors():
-		assert.Contains(t, err.Error(), "reload failed")
-	case <-time.After(2 * time.Second):
-		t.Fatal("expected reload error not received")
-	}
+	// Did not replace the flags with broken ones
+	assert.True(t, store.IsEnabled("test", EvalContext{}))
 }

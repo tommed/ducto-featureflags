@@ -1,13 +1,12 @@
 package sdk
 
 import (
+	"context"
 	"errors"
+	"github.com/stretchr/testify/assert"
 	"net/http"
 	"net/http/httptest"
 	"testing"
-	"time"
-
-	"github.com/stretchr/testify/assert"
 )
 
 func TestNewStoreFromURL_JSON(t *testing.T) {
@@ -29,7 +28,8 @@ func TestNewStoreFromURL_JSON(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	store, err := NewStoreFromURL(srv.URL+"/flags", "test-token")
+	ctx := context.Background()
+	store, err := NewStoreFromURL(ctx, srv.URL+"/flags", "test-token")
 	assert.NoError(t, err)
 	assert.True(t, store.IsEnabled("new_ui", evalContext))
 }
@@ -44,18 +44,11 @@ func TestNewStoreFromURL_Errors(t *testing.T) {
 		expected error
 	}{
 		{
-			name: "304",
-			args: args{
-				statusCode: http.StatusNotModified,
-			},
-			expected: NotModifiedError,
-		},
-		{
 			name: "500",
 			args: args{
 				statusCode: http.StatusInternalServerError,
 			},
-			expected: errors.New("server error: 500 Internal Server Error"),
+			expected: errors.New("http error: 500 Internal Server Error"),
 		},
 		{
 			name: "200 (but empty body)",
@@ -73,8 +66,9 @@ func TestNewStoreFromURL_Errors(t *testing.T) {
 			}))
 			defer srv.Close()
 
-			_, err := NewStoreFromURL(srv.URL+"/flags", "test-token", SetLastModified(time.Now()))
-			assert.Equal(t, err.Error(), tt.expected.Error())
+			ctx := context.Background()
+			_, err := NewStoreFromURL(ctx, srv.URL+"/flags", "test-token")
+			assert.Equal(t, tt.expected.Error(), err.Error())
 		})
 	}
 }
@@ -96,7 +90,8 @@ flags:
 	}))
 	defer srv.Close()
 
-	store, err := NewStoreFromURL(srv.URL+"/flags.yaml", "")
+	ctx := context.Background()
+	store, err := NewStoreFromURL(ctx, srv.URL+"/flags.yaml", "")
 	assert.NoError(t, err)
 
 	assert.True(t, store.IsEnabled("canary", EvalContext{"env": "prod"}))

@@ -21,13 +21,11 @@ func TestRunRoot_Serve_E2E(t *testing.T) {
 	file := filepath.Join(dir, "flags.json")
 
 	err := os.WriteFile(file, []byte(`{
-		"flags": {
-			"my_flag": {
-				"rules": [
-					{ "if": { "env": "prod" }, "value": true }
-				],
-				"enabled": false
-			}
+		"my_flag": {
+			"rules": [
+				{ "if": { "env": "prod" }, "value": true }
+			],
+			"enabled": false
 		}
 	}`), 0644)
 	assert.NoError(t, err)

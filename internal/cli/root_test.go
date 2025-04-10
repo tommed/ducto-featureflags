@@ -8,10 +8,8 @@ import (
 
 func TestRunRoot_ListFlags(t *testing.T) {
 	flags := `{
-		"flags": {
-			"foo": { "enabled": true },
-			"bar": { "enabled": false }
-		}
+		"foo": { "enabled": true },
+		"bar": { "enabled": false }
 	}`
 	path := writeTempFlags(t, flags)
 

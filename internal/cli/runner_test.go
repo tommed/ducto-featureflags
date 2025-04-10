@@ -22,9 +22,7 @@ func writeTempFlags(t *testing.T, json string) string {
 
 func TestRun_QuerySingleFlag(t *testing.T) {
 	flags := `{
-		"flags": {
-			"beta": { "enabled": true }
-		}
+		"beta": { "enabled": true }
 	}`
 	path := writeTempFlags(t, flags)
 
@@ -89,13 +87,11 @@ func TestRun_UnknownFlag(t *testing.T) {
 
 func TestRun_WithContextEvaluation(t *testing.T) {
 	flags := `{
-		"flags": {
-			"canary_mode": {
-				"rules": [
-					{ "if": { "user_group": "beta" }, "value": true }
-				],
-				"enabled": false
-			}
+		"canary_mode": {
+			"rules": [
+				{ "if": { "user_group": "beta" }, "value": true }
+			],
+			"enabled": false
 		}
 	}`
 

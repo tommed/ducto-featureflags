@@ -14,7 +14,7 @@ import (
 func TestHTTPProvider_Load_Success(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Last-Modified", time.Now().UTC().Format(http.TimeFormat))
-		_, _ = w.Write([]byte(`{"flags":{"x":{"enabled":true}}}`))
+		_, _ = w.Write([]byte(`{"x":{"enabled":true}}`))
 	}))
 	defer server.Close()
 
@@ -77,7 +77,7 @@ func TestHTTPProvider_Load_InvalidJSON(t *testing.T) {
 
 func TestHTTPProvider_Watch_OnlyFiresOnChange(t *testing.T) {
 	var body atomic.Value
-	body.Store(`{"flags":{"feature":{"enabled":true}}}`)
+	body.Store(`{"feature":{"enabled":true}}`)
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Last-Modified", time.Now().UTC().Format(http.TimeFormat))

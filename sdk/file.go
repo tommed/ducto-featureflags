@@ -20,9 +20,7 @@ func NewStoreFromFile(path string) (*Store, error) {
 
 // NewStoreFromBytesWithFormat allows loading from embedded YAML or JSON or remote fetch
 func NewStoreFromBytesWithFormat(data []byte, format string) (*Store, error) {
-	var parsed struct {
-		Flags map[string]Flag `json:"flags"`
-	}
+	var parsed map[string]Flag
 	switch format {
 	case "yaml":
 		if err := yaml.Unmarshal(data, &parsed); err != nil {
@@ -33,7 +31,7 @@ func NewStoreFromBytesWithFormat(data []byte, format string) (*Store, error) {
 			return nil, fmt.Errorf("parse JSON: %w", err)
 		}
 	}
-	return &Store{flags: parsed.Flags}, nil
+	return &Store{flags: parsed}, nil
 }
 
 func DetectFormat(path string) string {

@@ -338,9 +338,7 @@ func NewStoreFromFile(path string) (*Store, error) <span class="cov8" title="13"
 
 // NewStoreFromBytesWithFormat allows loading from embedded YAML or JSON or remote fetch
 func NewStoreFromBytesWithFormat(data []byte, format string) (*Store, error) <span class="cov10" title="24">{
-        var parsed struct {
-                Flags map[string]Flag `json:"flags"`
-        }
+        var parsed map[string]Flag
         switch format </span>{
         case "yaml":<span class="cov2" title="2">
                 if err := yaml.Unmarshal(data, &amp;parsed); err != nil </span><span class="cov0" title="0">{
@@ -351,7 +349,7 @@ func NewStoreFromBytesWithFormat(data []byte, format string) (*Store, error) <sp
                         return nil, fmt.Errorf("parse JSON: %w", err)
                 }</span>
         }
-        <span class="cov9" title="20">return &amp;Store{flags: parsed.Flags}, nil</span>
+        <span class="cov9" title="20">return &amp;Store{flags: parsed}, nil</span>
 }
 
 func DetectFormat(path string) string <span class="cov9" title="20">{
@@ -465,7 +463,7 @@ type Rule struct {
 type EvalContext map[string]string
 
 // Evaluate performs rule-based or fallback evaluation
-func (f Flag) Evaluate(ctx EvalContext) bool <span class="cov10" title="1031">{
+func (f Flag) Evaluate(ctx EvalContext) bool <span class="cov10" title="1030">{
         // Check rules first
         for _, rule := range f.Rules </span><span class="cov9" title="1020">{
                 if ruleMatches(rule.If, ctx, rule) </span><span class="cov7" title="113">{
@@ -473,7 +471,7 @@ func (f Flag) Evaluate(ctx EvalContext) bool <span class="cov10" title="1031">{
                 }</span>
         }
         // Fallback to Enabled
-        <span class="cov9" title="918">if f.Enabled != nil </span><span class="cov9" title="916">{
+        <span class="cov9" title="917">if f.Enabled != nil </span><span class="cov9" title="915">{
                 return *f.Enabled
         }</span>
         <span class="cov1" title="2">return false</span>
@@ -641,10 +639,10 @@ func NewStore(flags map[string]Flag) AnyStore <span class="cov0" title="0">{
 // IsEnabled returns true if the flag is defined and enabled
 func (s *Store) IsEnabled(key string, ctx EvalContext) bool <span class="cov10" title="24">{
         flag, ok := s.flags[key]
-        if !ok </span><span class="cov4" title="3">{
+        if !ok </span><span class="cov4" title="4">{
                 return false
         }</span>
-        <span class="cov9" title="21">return flag.Evaluate(ctx)</span>
+        <span class="cov9" title="20">return flag.Evaluate(ctx)</span>
 }
 
 // AllFlags returns the raw flag map

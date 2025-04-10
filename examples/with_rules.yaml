@@ -1,11 +1,10 @@
-flags:
-  new_ui:
-    rules:
-      - if:
-          env: "prod"
-          group: "beta"
-        value: true
-      - if:
-          env: "prod"
-        value: false
-    enabled: true
+new_ui:
+  rules:
+    - if:
+        env: "prod"
+        group: "beta"
+      value: true
+    - if:
+        env: "prod"
+      value: false
+  enabled: true

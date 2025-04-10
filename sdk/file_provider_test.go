@@ -42,9 +42,7 @@ func TestWatchingStore_ReloadsOnChange(t *testing.T) {
 
 	// Write initial file
 	writeTestFlags(t, file, `{
-		"flags": {
-			"new_ui": { "enabled": false }
-		}
+		"new_ui": { "enabled": false }
 	}`)
 
 	provider := NewFileProvider(file)
@@ -59,9 +57,7 @@ func TestWatchingStore_ReloadsOnChange(t *testing.T) {
 
 	// Modify file to flip flag to true
 	writeTestFlags(t, file, `{
-		"flags": {
-			"new_ui": { "enabled": true }
-		}
+		"new_ui": { "enabled": true }
 	}`)
 
 	// Wait for reload (polling version)
@@ -81,9 +77,7 @@ func TestWatchingStore_HandlesBadFileGracefully(t *testing.T) {
 	file := filepath.Join(tmp, "flags.json")
 
 	writeTestFlags(t, file, `{
-		"flags": {
-			"test": { "enabled": true }
-		}
+		"test": { "enabled": true }
 	}`)
 
 	provider := NewFileProvider(file)

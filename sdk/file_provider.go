@@ -85,7 +85,7 @@ func (f *fileProvider) Watch(ctx context.Context, onChange func(*Store)) {
 				}
 			}
 		case err := <-watcher.Errors:
-			f.logEvent("error watching file: %w", err)
+			f.logEvent("error watching file: %v", err)
 		}
 	}
 }

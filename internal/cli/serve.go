@@ -1,11 +1,14 @@
 package cli
 
 import (
+	"context"
 	"encoding/json"
 	"flag"
 	"fmt"
 	"io"
 	"net/http"
+	"os"
+	"os/signal"
 
 	"github.com/tommed/ducto-featureflags/sdk"
 )
@@ -13,6 +16,8 @@ import (
 //goland:noinspection GoUnhandledErrorResult
 func Serve(args []string, stdout, stderr io.Writer) int {
 	fs := flag.NewFlagSet("serve", flag.ExitOnError)
+	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, os.Kill)
+	defer cancel()
 
 	var file string
 	var addr string
@@ -27,12 +32,13 @@ func Serve(args []string, stdout, stderr io.Writer) int {
 		return 1
 	}
 
-	store, err := sdk.NewFileWatchingStore(file)
+	provider := sdk.NewFileProvider(file)
+	store := sdk.NewDynamicStore(ctx, provider)
+	err := store.Start()
 	if err != nil {
 		fmt.Fprintf(stderr, "failed to load flags: %v\n", err)
 		return 1
 	}
-	defer store.Close()
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("/api/flags", func(w http.ResponseWriter, r *http.Request) {

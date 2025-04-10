@@ -11,7 +11,8 @@ type StoreProvider interface {
 	Watch(ctx context.Context, onChange func(*Store))
 }
 
-// DynamicStore wraps a StoreProvider and handles live updates to the internal store.
+// DynamicStore is a AnyStore which wraps a StoreProvider and handles live updates to the internal store.
+// You can call it in the same way you call Store, except you need to call Start first.
 type DynamicStore struct {
 	mu     sync.RWMutex
 	store  *Store

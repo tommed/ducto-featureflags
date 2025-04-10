@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/stretchr/testify/assert"
+	"gopkg.in/yaml.v3"
 	"io"
 	"net/http"
 	"os"
@@ -13,14 +14,47 @@ import (
 	"time"
 )
 
+//goland:noinspection GoUnhandledErrorResult
 func TestRunRoot_Serve_E2E(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skipping e2e tests in short mode")
 	}
-	dir := t.TempDir()
-	file := filepath.Join(dir, "flags.json")
+	type args struct {
+		extension string
+		decoder   func(data []byte, v any) error
+	}
+	var tests = []struct {
+		name string
+		args args
+	}{
+		{
+			name: "no extension",
+			args: args{
+				extension: "",
+				decoder:   json.Unmarshal,
+			},
+		},
+		{
+			name: ".json extension",
+			args: args{
+				extension: ".json",
+				decoder:   json.Unmarshal,
+			},
+		},
+		{
+			name: ".yaml extension",
+			args: args{
+				extension: ".yaml",
+				decoder:   yaml.Unmarshal,
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			dir := t.TempDir()
+			file := filepath.Join(dir, "flags.json")
 
-	err := os.WriteFile(file, []byte(`{
+			err := os.WriteFile(file, []byte(`{
 		"my_flag": {
 			"rules": [
 				{ "if": { "env": "prod" }, "value": true }
@@ -28,31 +62,36 @@ func TestRunRoot_Serve_E2E(t *testing.T) {
 			"enabled": false
 		}
 	}`), 0644)
-	assert.NoError(t, err)
+			assert.NoError(t, err)
 
-	// Use a unique port to avoid collisions
-	port := "9173"
-	go func() {
-		stdout, stderr := new(bytes.Buffer), new(bytes.Buffer)
-		_ = RunRoot([]string{"serve", "-file", file, "-addr", ":" + port}, stdout, stderr)
-	}()
+			// Use a unique port to avoid collisions
+			port := "9173"
+			go func() {
+				stdout, stderr := new(bytes.Buffer), new(bytes.Buffer)
+				_ = RunRoot([]string{"serve", "-file", file, "-addr", ":" + port}, stdout, stderr)
+			}()
 
-	// Give the server a moment to start
-	time.Sleep(500 * time.Millisecond)
+			// Give the server a moment to start
+			time.Sleep(500 * time.Millisecond)
 
-	// Make a request
-	resp, err := http.Get(fmt.Sprintf("http://localhost:%s/api/flags?key=my_flag&env=prod", port))
-	assert.NoError(t, err)
-	defer resp.Body.Close()
+			// Make a request
+			resp, err := http.Get(fmt.Sprintf("http://localhost:%s/api/flags%s?key=my_flag&env=prod",
+				port,
+				tt.args.extension))
+			assert.NoError(t, err)
+			defer resp.Body.Close()
 
-	body, _ := io.ReadAll(resp.Body)
-	var result map[string]bool
-	_ = json.Unmarshal(body, &result)
+			body, _ := io.ReadAll(resp.Body)
+			var result map[string]bool
+			_ = tt.args.decoder(body, &result)
 
-	assert.Equal(t, http.StatusOK, resp.StatusCode)
-	assert.Equal(t, true, result["enabled"])
+			assert.Equal(t, http.StatusOK, resp.StatusCode)
+			assert.Equal(t, true, result["enabled"])
+		})
+	}
 }
 
+//goland:noinspection GoUnhandledErrorResult
 func TestServe_WithToken_EnforcesAuth(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skipping e2e tests in short mode")

@@ -3,6 +3,7 @@ package sdk
 import (
 	"context"
 	"sync"
+	"time"
 )
 
 // StoreProvider defines something that can provide and watch a Store (e.g., from file, http, etc.)
@@ -14,10 +15,11 @@ type StoreProvider interface {
 // DynamicStore is a AnyStore which wraps a StoreProvider and handles live updates to the internal store.
 // You can call it in the same way you call Store, except you need to call Start first.
 type DynamicStore struct {
-	mu     sync.RWMutex
-	store  *Store
-	source StoreProvider
-	ctx    context.Context
+	mu          sync.RWMutex
+	store       *Store
+	lastUpdated time.Time
+	source      StoreProvider
+	ctx         context.Context
 }
 
 // NewDynamicStore creates a dynamic flag store that tracks updates from the provider.
@@ -28,6 +30,12 @@ func NewDynamicStore(ctx context.Context, provider StoreProvider) *DynamicStore 
 	}
 }
 
+func (d *DynamicStore) LastUpdated() time.Time {
+	d.mu.RLock()
+	defer d.mu.RUnlock()
+	return d.lastUpdated
+}
+
 // Start begins watching the underlying source. Should be called once.
 func (d *DynamicStore) Start() error {
 	initial, err := d.source.Load(d.ctx)
@@ -35,6 +43,7 @@ func (d *DynamicStore) Start() error {
 		return err
 	}
 	d.store = initial
+	d.lastUpdated = time.Now()
 
 	go d.source.Watch(d.ctx, func(updated *Store) {
 		if updated == nil {
@@ -42,6 +51,7 @@ func (d *DynamicStore) Start() error {
 		}
 		d.mu.Lock()
 		d.store = updated
+		d.lastUpdated = time.Now()
 		d.mu.Unlock()
 	})
 

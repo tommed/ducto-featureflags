@@ -63,7 +63,7 @@
 				
 				<option value="file3">github.com/tommed/ducto-featureflags/internal/cli/runner.go (100.0%)</option>
 				
-				<option value="file4">github.com/tommed/ducto-featureflags/internal/cli/serve.go (81.0%)</option>
+				<option value="file4">github.com/tommed/ducto-featureflags/internal/cli/serve.go (81.8%)</option>
 				
 				<option value="file5">github.com/tommed/ducto-featureflags/sdk/file.go (93.3%)</option>
 				
@@ -77,7 +77,7 @@
 				
 				<option value="file10">github.com/tommed/ducto-featureflags/sdk/store.go (83.3%)</option>
 				
-				<option value="file11">github.com/tommed/ducto-featureflags/sdk/store_dynamic.go (72.2%)</option>
+				<option value="file11">github.com/tommed/ducto-featureflags/sdk/store_dynamic.go (78.3%)</option>
 				
 				<option value="file12">github.com/tommed/ducto-featureflags/sdk/utils.go (100.0%)</option>
 				
@@ -151,13 +151,13 @@ import (
         "io"
 )
 
-func RunRoot(args []string, stdout, stderr io.Writer) int <span class="cov10" title="2">{
+func RunRoot(args []string, stdout, stderr io.Writer) int <span class="cov10" title="4">{
         if len(args) == 0 </span><span class="cov0" title="0">{
                 return Run(args, stdout, stderr)
         }</span>
 
-        <span class="cov10" title="2">switch args[0] </span>{
-        case "serve":<span class="cov1" title="1">
+        <span class="cov10" title="4">switch args[0] </span>{
+        case "serve":<span class="cov8" title="3">
                 return Serve(args[1:], stdout, stderr)</span>
         default:<span class="cov1" title="1">
                 return Run(args, stdout, stderr)</span>
@@ -236,16 +236,18 @@ import (
         "encoding/json"
         "flag"
         "fmt"
+        "gopkg.in/yaml.v3"
         "io"
         "net/http"
         "os"
         "os/signal"
+        "time"
 
         "github.com/tommed/ducto-featureflags/sdk"
 )
 
 //goland:noinspection GoUnhandledErrorResult
-func Serve(args []string, stdout, stderr io.Writer) int <span class="cov6" title="2">{
+func Serve(args []string, stdout, stderr io.Writer) int <span class="cov6" title="4">{
         fs := flag.NewFlagSet("serve", flag.ExitOnError)
         ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, os.Kill)
         defer cancel()
@@ -263,7 +265,7 @@ func Serve(args []string, stdout, stderr io.Writer) int <span class="cov6" title
                 return 1
         }</span>
 
-        <span class="cov6" title="2">provider := sdk.NewFileProvider(file)
+        <span class="cov6" title="4">provider := sdk.NewFileProvider(file)
         store := sdk.NewDynamicStore(ctx, provider)
         err := store.Start()
         if err != nil </span><span class="cov0" title="0">{
@@ -271,49 +273,76 @@ func Serve(args []string, stdout, stderr io.Writer) int <span class="cov6" title
                 return 1
         }</span>
 
-        <span class="cov6" title="2">mux := http.NewServeMux()
-        mux.HandleFunc("/api/flags", func(w http.ResponseWriter, r *http.Request) </span><span class="cov10" title="3">{
-                if token != "" </span><span class="cov6" title="2">{
-                        auth := r.Header.Get("Authorization")
-                        expected := "Bearer " + token
-                        if auth != expected </span><span class="cov1" title="1">{
-                                http.Error(w, "unauthorized", http.StatusUnauthorized)
-                                return
-                        }</span>
-                }
-
-                <span class="cov6" title="2">key := r.URL.Query().Get("key")
-                if key != "" </span><span class="cov6" title="2">{
-                        // Convert query params to EvalContext
-                        ctx := sdk.EvalContext{}
-                        for k, v := range r.URL.Query() </span><span class="cov10" title="3">{
-                                if len(v) &gt; 0 </span><span class="cov10" title="3">{
-                                        ctx[k] = v[0]
+        <span class="cov6" title="4">mux := http.NewServeMux()
+        var handler = func(encode func(w http.ResponseWriter, graph interface{})) http.HandlerFunc </span><span class="cov10" title="12">{
+                return func(w http.ResponseWriter, r *http.Request) </span><span class="cov6" title="5">{
+                        if token != "" </span><span class="cov3" title="2">{
+                                auth := r.Header.Get("Authorization")
+                                expected := "Bearer " + token
+                                if auth != expected </span><span class="cov1" title="1">{
+                                        http.Error(w, "unauthorized", http.StatusUnauthorized)
+                                        return
                                 }</span>
                         }
-                        // Now fetch the flag value
-                        <span class="cov6" title="2">result := store.IsEnabled(key, ctx)
-                        _ = json.NewEncoder(w).Encode(map[string]bool{"enabled": result})
-                        return</span>
+
+                        // Handle If-Modified-Since and 304s
+                        <span class="cov6" title="4">ifModified := r.Header.Get("If-Modified-Since")
+                        if ifModified != "" </span><span class="cov0" title="0">{
+                                if t, err := http.ParseTime(ifModified); err == nil </span><span class="cov0" title="0">{
+                                        if !store.LastUpdated().IsZero() &amp;&amp; store.LastUpdated().Before(t.Add(1*time.Second)) </span><span class="cov0" title="0">{
+                                                w.WriteHeader(http.StatusNotModified)
+                                                return
+                                        }</span>
+                                }
+                        }
+                        <span class="cov6" title="4">w.Header().Set("Last-Modified", store.LastUpdated().UTC().Format(http.TimeFormat))
+
+                        // Fetch the eval context from the query-string
+                        key := r.URL.Query().Get("key")
+                        if key != "" </span><span class="cov6" title="4">{
+                                // Convert query params to EvalContext
+                                ctx := sdk.EvalContext{}
+                                for k, v := range r.URL.Query() </span><span class="cov8" title="7">{
+                                        if len(v) &gt; 0 </span><span class="cov8" title="7">{
+                                                ctx[k] = v[0]
+                                        }</span>
+                                }
+
+                                // Determine what to send back
+                                <span class="cov6" title="4">result := store.IsEnabled(key, ctx)
+                                encode(w, map[string]bool{"enabled": result})
+                                return</span>
+                        }
+
+                        // Just list all flags
+                        <span class="cov0" title="0">encode(w, store.AllFlags())</span>
                 }
+        }
+        <span class="cov6" title="4">mux.HandleFunc("/api/flags", handler(handleJSON))
+        mux.HandleFunc("/api/flags.yaml", handler(handleYAML))
+        mux.HandleFunc("/api/flags.json", handler(handleJSON))
 
-                // Just list all flags
-                <span class="cov0" title="0">_ = json.NewEncoder(w).Encode(store.AllFlags())</span>
-        })
-
-        <span class="cov6" title="2">server := &amp;http.Server{
+        server := &amp;http.Server{
                 Addr:    addr,
                 Handler: mux,
         }
 
         fmt.Fprintf(stdout, "Listening on %s...\n", addr)
-        if err := server.ListenAndServe(); err != nil </span><span class="cov0" title="0">{
+        if err := server.ListenAndServe(); err != nil </span><span class="cov3" title="2">{
                 fmt.Fprintf(stderr, "server failed: %v", err)
                 return 1
         }</span>
 
         <span class="cov0" title="0">return 0</span>
 }
+
+func handleJSON(w http.ResponseWriter, graph interface{}) <span class="cov4" title="3">{
+        _ = json.NewEncoder(w).Encode(graph)
+}</span>
+
+func handleYAML(w http.ResponseWriter, graph interface{}) <span class="cov1" title="1">{
+        _ = yaml.NewEncoder(w).Encode(graph)
+}</span>
 </pre>
 		
 		<pre class="file" id="file5" style="display: none">package sdk
@@ -328,36 +357,36 @@ import (
 )
 
 // NewStoreFromFile loads flags from a JSON file into memory
-func NewStoreFromFile(path string) (*Store, error) <span class="cov8" title="13">{
+func NewStoreFromFile(path string) (*Store, error) <span class="cov8" title="15">{
         data, err := os.ReadFile(path)
         if err != nil </span><span class="cov2" title="2">{
                 return nil, fmt.Errorf("read flag file: %w", err)
         }</span>
-        <span class="cov7" title="11">return NewStoreFromBytesWithFormat(data, DetectFormat(path))</span>
+        <span class="cov8" title="13">return NewStoreFromBytesWithFormat(data, DetectFormat(path))</span>
 }
 
 // NewStoreFromBytesWithFormat allows loading from embedded YAML or JSON or remote fetch
-func NewStoreFromBytesWithFormat(data []byte, format string) (*Store, error) <span class="cov10" title="24">{
+func NewStoreFromBytesWithFormat(data []byte, format string) (*Store, error) <span class="cov10" title="26">{
         var parsed map[string]Flag
         switch format </span>{
         case "yaml":<span class="cov2" title="2">
                 if err := yaml.Unmarshal(data, &amp;parsed); err != nil </span><span class="cov0" title="0">{
                         return nil, fmt.Errorf("parse YAML: %w", err)
                 }</span>
-        default:<span class="cov9" title="22">
+        default:<span class="cov9" title="24">
                 if err := json.Unmarshal(data, &amp;parsed); err != nil </span><span class="cov4" title="4">{
                         return nil, fmt.Errorf("parse JSON: %w", err)
                 }</span>
         }
-        <span class="cov9" title="20">return &amp;Store{flags: parsed}, nil</span>
+        <span class="cov9" title="22">return &amp;Store{flags: parsed}, nil</span>
 }
 
-func DetectFormat(path string) string <span class="cov9" title="20">{
+func DetectFormat(path string) string <span class="cov9" title="22">{
         ext := strings.ToLower(filepath.Ext(path))
         switch ext </span>{
         case ".yaml", ".yml":<span class="cov2" title="2">
                 return "yaml"</span>
-        default:<span class="cov9" title="18">
+        default:<span class="cov9" title="20">
                 return "json"</span>
         }
 }
@@ -375,7 +404,7 @@ import (
         "github.com/fsnotify/fsnotify"
 )
 
-func NewFileProvider(path string) StoreProvider <span class="cov5" title="4">{
+func NewFileProvider(path string) StoreProvider <span class="cov6" title="6">{
         return &amp;fileProvider{path: path}
 }</span>
 
@@ -387,43 +416,43 @@ type fileProvider struct {
 }
 
 // Load loads the current store from disk.
-func (f *fileProvider) Load(ctx context.Context) (*Store, error) <span class="cov6" title="6">{
+func (f *fileProvider) Load(_ context.Context) (*Store, error) <span class="cov7" title="8">{
         absPath, err := filepath.Abs(f.path)
         if err != nil </span><span class="cov0" title="0">{
                 return nil, err
         }</span>
-        <span class="cov6" title="6">store, err := NewStoreFromFile(absPath)
+        <span class="cov7" title="8">store, err := NewStoreFromFile(absPath)
         if err != nil </span><span class="cov1" title="1">{
                 return nil, err
         }</span>
 
-        <span class="cov6" title="5">f.lastLock.Lock()
+        <span class="cov7" title="7">f.lastLock.Lock()
         f.last = store
         f.lastLock.Unlock()
 
         return store, nil</span>
 }
 
-func (f *fileProvider) Watch(ctx context.Context, onChange func(*Store)) <span class="cov5" title="4">{
+func (f *fileProvider) Watch(ctx context.Context, onChange func(*Store)) <span class="cov6" title="6">{
         absPath, err := filepath.Abs(f.path)
         if err != nil </span><span class="cov0" title="0">{
                 return
         }</span>
 
-        <span class="cov5" title="4">dir := filepath.Dir(absPath)
+        <span class="cov6" title="6">dir := filepath.Dir(absPath)
         watcher, err := fsnotify.NewWatcher()
         if err != nil </span><span class="cov0" title="0">{
                 return
         }</span>
         //goland:noinspection GoUnhandledErrorResult
-        <span class="cov5" title="4">defer watcher.Close()
+        <span class="cov6" title="6">defer watcher.Close()
         _ = watcher.Add(dir)
 
-        for </span><span class="cov10" title="16">{
+        for </span><span class="cov10" title="18">{
                 select </span>{
-                case &lt;-ctx.Done():<span class="cov3" title="2">
+                case &lt;-ctx.Done():<span class="cov5" title="4">
                         return</span>
-                case evt := &lt;-watcher.Events:<span class="cov9" title="12">
+                case evt := &lt;-watcher.Events:<span class="cov8" title="12">
                         evtPath := filepath.Clean(evt.Name)
                         if evtPath != absPath </span><span class="cov7" title="8">{
                                 continue</span>
@@ -463,10 +492,10 @@ type Rule struct {
 type EvalContext map[string]string
 
 // Evaluate performs rule-based or fallback evaluation
-func (f Flag) Evaluate(ctx EvalContext) bool <span class="cov10" title="1030">{
+func (f Flag) Evaluate(ctx EvalContext) bool <span class="cov10" title="1032">{
         // Check rules first
-        for _, rule := range f.Rules </span><span class="cov9" title="1020">{
-                if ruleMatches(rule.If, ctx, rule) </span><span class="cov7" title="113">{
+        for _, rule := range f.Rules </span><span class="cov9" title="1022">{
+                if ruleMatches(rule.If, ctx, rule) </span><span class="cov7" title="115">{
                         return rule.Value
                 }</span>
         }
@@ -477,14 +506,14 @@ func (f Flag) Evaluate(ctx EvalContext) bool <span class="cov10" title="1030">{
         <span class="cov1" title="2">return false</span>
 }
 
-func ruleMatches(conditions map[string]string, ctx EvalContext, rule Rule) bool <span class="cov9" title="1020">{
-        for k, v := range conditions </span><span class="cov4" title="19">{
+func ruleMatches(conditions map[string]string, ctx EvalContext, rule Rule) bool <span class="cov9" title="1022">{
+        for k, v := range conditions </span><span class="cov4" title="21">{
                 if ctx[k] != v </span><span class="cov3" title="9">{
                         return false
                 }</span>
         }
         // Handle percent rule (optional)
-        <span class="cov9" title="1011">if rule.Percent != nil </span><span class="cov9" title="1003">{
+        <span class="cov9" title="1013">if rule.Percent != nil </span><span class="cov9" title="1003">{
                 if *rule.Percent &lt;= 0 </span><span class="cov0" title="0">{
                         return false
                 }</span>
@@ -507,7 +536,7 @@ func ruleMatches(conditions map[string]string, ctx EvalContext, rule Rule) bool 
                 <span class="cov9" title="1003">percent := hashToPercent(seedVal, rule.SeedHash)
                 return percent &lt; *rule.Percent</span>
         }
-        <span class="cov3" title="8">return true</span>
+        <span class="cov3" title="10">return true</span>
 }
 </pre>
 		
@@ -637,12 +666,12 @@ func NewStore(flags map[string]Flag) AnyStore <span class="cov0" title="0">{
 }</span>
 
 // IsEnabled returns true if the flag is defined and enabled
-func (s *Store) IsEnabled(key string, ctx EvalContext) bool <span class="cov10" title="24">{
+func (s *Store) IsEnabled(key string, ctx EvalContext) bool <span class="cov10" title="26">{
         flag, ok := s.flags[key]
         if !ok </span><span class="cov4" title="4">{
                 return false
         }</span>
-        <span class="cov9" title="20">return flag.Evaluate(ctx)</span>
+        <span class="cov9" title="22">return flag.Evaluate(ctx)</span>
 }
 
 // AllFlags returns the raw flag map
@@ -656,6 +685,7 @@ func (s *Store) AllFlags() map[string]Flag <span class="cov2" title="2">{
 import (
         "context"
         "sync"
+        "time"
 )
 
 // StoreProvider defines something that can provide and watch a Store (e.g., from file, http, etc.)
@@ -667,27 +697,35 @@ type StoreProvider interface {
 // DynamicStore is a AnyStore which wraps a StoreProvider and handles live updates to the internal store.
 // You can call it in the same way you call Store, except you need to call Start first.
 type DynamicStore struct {
-        mu     sync.RWMutex
-        store  *Store
-        source StoreProvider
-        ctx    context.Context
+        mu          sync.RWMutex
+        store       *Store
+        lastUpdated time.Time
+        source      StoreProvider
+        ctx         context.Context
 }
 
 // NewDynamicStore creates a dynamic flag store that tracks updates from the provider.
-func NewDynamicStore(ctx context.Context, provider StoreProvider) *DynamicStore <span class="cov8" title="4">{
+func NewDynamicStore(ctx context.Context, provider StoreProvider) *DynamicStore <span class="cov9" title="6">{
         return &amp;DynamicStore{
                 source: provider,
                 ctx:    ctx,
         }
 }</span>
 
+func (d *DynamicStore) LastUpdated() time.Time <span class="cov7" title="4">{
+        d.mu.RLock()
+        defer d.mu.RUnlock()
+        return d.lastUpdated
+}</span>
+
 // Start begins watching the underlying source. Should be called once.
-func (d *DynamicStore) Start() error <span class="cov8" title="4">{
+func (d *DynamicStore) Start() error <span class="cov9" title="6">{
         initial, err := d.source.Load(d.ctx)
         if err != nil </span><span class="cov0" title="0">{
                 return err
         }</span>
-        <span class="cov8" title="4">d.store = initial
+        <span class="cov9" title="6">d.store = initial
+        d.lastUpdated = time.Now()
 
         go d.source.Watch(d.ctx, func(updated *Store) </span><span class="cov1" title="1">{
                 if updated == nil </span><span class="cov0" title="0">{
@@ -695,14 +733,15 @@ func (d *DynamicStore) Start() error <span class="cov8" title="4">{
                 }</span>
                 <span class="cov1" title="1">d.mu.Lock()
                 d.store = updated
+                d.lastUpdated = time.Now()
                 d.mu.Unlock()</span>
         })
 
-        <span class="cov8" title="4">return nil</span>
+        <span class="cov9" title="6">return nil</span>
 }
 
 // IsEnabled evaluates a feature flag for the given context.
-func (d *DynamicStore) IsEnabled(key string, ctx EvalContext) bool <span class="cov10" title="5">{
+func (d *DynamicStore) IsEnabled(key string, ctx EvalContext) bool <span class="cov10" title="7">{
         d.mu.RLock()
         defer d.mu.RUnlock()
         return d.store.IsEnabled(key, ctx)

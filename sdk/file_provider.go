@@ -22,7 +22,7 @@ type fileProvider struct {
 }
 
 // Load loads the current store from disk.
-func (f *fileProvider) Load(ctx context.Context) (*Store, error) {
+func (f *fileProvider) Load(_ context.Context) (*Store, error) {
 	absPath, err := filepath.Abs(f.path)
 	if err != nil {
 		return nil, err

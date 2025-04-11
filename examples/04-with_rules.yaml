@@ -1,10 +1,12 @@
 new_ui:
+  enabled: false
   rules:
     - if:
-        env: "prod"
+        env: "dev"
+      value: true
+    - if:
         group: "beta"
       value: true
     - if:
         env: "prod"
       value: false
-  enabled: true

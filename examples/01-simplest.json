@@ -1,6 +1,4 @@
 {
-  "flags": {
     "new_ui": { "enabled": true },
     "beta_mode": { "enabled": false }
-  }
 }

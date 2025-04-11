@@ -48,7 +48,7 @@ func (f *fileProvider) Load(_ context.Context) (*Store, error) {
 	f.lastLock.Lock()
 	f.last = store
 	f.lastLock.Unlock()
-	f.logEvent("Store updated")
+	f.logEvent("Store updated at %s", time.Now())
 
 	return store, nil
 }

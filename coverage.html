@@ -451,7 +451,7 @@ func (f *fileProvider) Load(_ context.Context) (*Store, error) <span class="cov7
         <span class="cov6" title="7">f.lastLock.Lock()
         f.last = store
         f.lastLock.Unlock()
-        f.logEvent("Store updated")
+        f.logEvent("Store updated at %s", time.Now())
 
         return store, nil</span>
 }
@@ -517,26 +517,26 @@ type EvalContext map[string]string
 // Evaluate performs rule-based or fallback evaluation
 func (f Flag) Evaluate(ctx EvalContext) bool <span class="cov10" title="1032">{
         // Check rules first
-        for _, rule := range f.Rules </span><span class="cov9" title="1022">{
-                if ruleMatches(rule.If, ctx, rule) </span><span class="cov7" title="115">{
+        for _, rule := range f.Rules </span><span class="cov9" title="1023">{
+                if ruleMatches(rule.If, ctx, rule) </span><span class="cov7" title="116">{
                         return rule.Value
                 }</span>
         }
         // Fallback to Enabled
-        <span class="cov9" title="917">if f.Enabled != nil </span><span class="cov9" title="915">{
+        <span class="cov9" title="916">if f.Enabled != nil </span><span class="cov9" title="914">{
                 return *f.Enabled
         }</span>
         <span class="cov1" title="2">return false</span>
 }
 
-func ruleMatches(conditions map[string]string, ctx EvalContext, rule Rule) bool <span class="cov9" title="1022">{
-        for k, v := range conditions </span><span class="cov4" title="21">{
+func ruleMatches(conditions map[string]string, ctx EvalContext, rule Rule) bool <span class="cov9" title="1023">{
+        for k, v := range conditions </span><span class="cov4" title="20">{
                 if ctx[k] != v </span><span class="cov3" title="9">{
                         return false
                 }</span>
         }
         // Handle percent rule (optional)
-        <span class="cov9" title="1013">if rule.Percent != nil </span><span class="cov9" title="1003">{
+        <span class="cov9" title="1014">if rule.Percent != nil </span><span class="cov9" title="1003">{
                 if *rule.Percent &lt;= 0 </span><span class="cov0" title="0">{
                         return false
                 }</span>
@@ -559,7 +559,7 @@ func ruleMatches(conditions map[string]string, ctx EvalContext, rule Rule) bool 
                 <span class="cov9" title="1003">percent := hashToPercent(seedVal, rule.SeedHash)
                 return percent &lt; *rule.Percent</span>
         }
-        <span class="cov3" title="10">return true</span>
+        <span class="cov4" title="11">return true</span>
 }
 </pre>
 		

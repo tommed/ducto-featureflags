@@ -1,0 +1,12 @@
+{
+  "new_ui": {
+    "rules": [
+      {
+        "percent": 5,
+        "seed": "user_id",
+        "value": true
+      }
+    ],
+    "enabled": false
+  }
+}

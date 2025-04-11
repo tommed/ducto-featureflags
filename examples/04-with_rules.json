@@ -1,0 +1,10 @@
+{
+  "new_ui": {
+    "rules": [
+      { "if": { "env": "dev" }, "value": true },
+      { "if": { "group": "beta" }, "value": true },
+      { "if": { "env": "prod" }, "value": false }
+    ],
+    "enabled": false
+  }
+}

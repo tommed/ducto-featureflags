@@ -63,7 +63,7 @@ To make this more dynamic, you can add rules based on an `EvalContext`:
 }
 ```
 
-You can also make use of YAML files, like this [example here](./examples/with_rules.yaml).
+You can also make use of YAML files, like this [example here](./examples/04-with_rules.yaml).
 
 ---
 ## 🧑‍💻 Usage (SDK)

@@ -8,7 +8,7 @@ import (
 )
 
 func TestYAMLFlagFile_EvaluatesCorrectly(t *testing.T) {
-	path := filepath.Join("..", "examples", "with_rules.yaml")
+	path := filepath.Join("..", "examples", "04-with_rules.yaml")
 
 	store, err := NewStoreFromFile(path)
 	assert.NoError(t, err)

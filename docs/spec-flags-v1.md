@@ -5,6 +5,9 @@
     </a>
 </p>
 
+> [!WARNING]
+> This specification is now deprecated. Please refer to [Version 2](../spec-flags-v2.md) instead.
+
 # Feature Flags: Specification v1
 
 This specification defines the **v1 structure and behavior** of the feature flag engine used by `ducto-featureflags`. It documents the design as originally implemented prior to OpenFeature compatibility and multi-variant support.

@@ -38,11 +38,6 @@ func makeTestProvider(flags string) openfeature.FeatureProvider {
 	return NewProvider(store)
 }
 
-func withContext(attrs map[string]interface{}) context.Context {
-	evalCtx := openfeature.NewEvaluationContext("tester", attrs)
-	return openfeature.WithTransactionContext(context.Background(), evalCtx)
-}
-
 func TestBooleanEvaluation(t *testing.T) {
 	provider := makeTestProvider(`{
 		"beta_enabled": {

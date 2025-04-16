@@ -23,7 +23,7 @@
 - CLI tools and test harnesses
 
 It supports both static file-based flags and dynamic backends, and can be used as:
-- A **Go SDK** (directly, or as an [OpenFeature Provider](https://github.com/open-feature/go-sdk/openfeature))
+- A **Go SDK** (directly, or as an [OpenFeature Provider](https://github.com/open-feature/go-sdk))
 - A **CLI for testing**
 - A **preprocessor plugin** in the [ducto-orchestrator](https://github.com/tommed/ducto-orchestrator)
 

@@ -158,10 +158,10 @@ and even objects like so:
 The v2 feature flag engine introduces typed variant support and full OpenFeature compatibility. Evaluation resolves named variants based on rule context, with fallback to a default. This builds on v1’s boolean-only engine to support modern use cases like experimentation, segmentation, and multi-type resolution across platforms.
 
 This specification supports:
-- `ResolveBooleanValue`
-- `ResolveStringValue`
-- `ResolveIntValue`
-- `ResolveFloatValue`
-- `ResolveObjectValue`
+- `BooleanEvaluation`
+- `StringEvaluation`
+- `IntEvaluation`
+- `FloatEvaluation`
+- `ObjectEvaluation`
 
 It is the foundation for the `ducto-featureflags/openfeature` provider module.

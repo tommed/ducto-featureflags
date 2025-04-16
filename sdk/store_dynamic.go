@@ -58,11 +58,11 @@ func (d *DynamicStore) Start() error {
 	return nil
 }
 
-// IsEnabled evaluates a feature flag for the given context.
-func (d *DynamicStore) IsEnabled(key string, ctx EvalContext) bool {
+// Get retrieves an un-evaluated flag, ready for evaluation.
+func (d *DynamicStore) Get(key string) (Flag, bool) {
 	d.mu.RLock()
 	defer d.mu.RUnlock()
-	return d.store.IsEnabled(key, ctx)
+	return d.store.Get(key)
 }
 
 // AllFlags returns all current flag definitions.

@@ -14,14 +14,16 @@ import (
 func TestHTTPProvider_Load_Success(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Last-Modified", time.Now().UTC().Format(http.TimeFormat))
-		_, _ = w.Write([]byte(`{"x":{"enabled":true}}`))
+		_, _ = w.Write([]byte(`{"x":{"variants": {"yes":true, "no":false}, "defaultVariant":"yes"}}`))
 	}))
 	defer server.Close()
 
 	p := NewHTTPProvider(server.URL, "", time.Second).(*httpProvider)
 	store, err := p.Load(context.Background())
 	assert.NoError(t, err)
-	assert.True(t, store.IsEnabled("x", nil))
+	f, _ := store.Get("x")
+	_, rawVal, _, _ := f.Evaluate(nil)
+	assert.True(t, rawVal.(bool))
 }
 
 func TestHTTPProvider_Load_304(t *testing.T) {
@@ -77,7 +79,7 @@ func TestHTTPProvider_Load_InvalidJSON(t *testing.T) {
 
 func TestHTTPProvider_Watch_OnlyFiresOnChange(t *testing.T) {
 	var body atomic.Value
-	body.Store(`{"feature":{"enabled":true}}`)
+	body.Store(`{"feature":{"variants": {"yes":true, "no":false}, "defaultVariant":"yes"}}`)
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Last-Modified", time.Now().UTC().Format(http.TimeFormat))
@@ -95,8 +97,12 @@ func TestHTTPProvider_Watch_OnlyFiresOnChange(t *testing.T) {
 	_, _ = p.Load(context.Background())
 
 	go p.Watch(ctx, func(s *Store) {
-		if s != nil && s.IsEnabled("feature", nil) {
-			atomic.AddInt32(&hits, 1)
+		if s != nil {
+			f, _ := s.Get("feature")
+			_, rawBool, _, _ := f.Evaluate(nil)
+			if rawBool.(bool) {
+				atomic.AddInt32(&hits, 1)
+			}
 		}
 	})
 

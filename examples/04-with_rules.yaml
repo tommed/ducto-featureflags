@@ -1,12 +1,21 @@
 new_ui:
-  enabled: false
+  variants:
+    dev: 0
+    alpha: 1
+    beta: 2
+    current: 3
+    stable: 4
+  defaultVariant: current
   rules:
     - if:
         env: "dev"
-      value: true
+      variant: dev
     - if:
-        group: "beta"
-      value: true
+        env: "alpha"
+      variant: alpha
+    - if:
+        env: "beta"
+      variant: beta
     - if:
         env: "prod"
-      value: false
+      variant: stable

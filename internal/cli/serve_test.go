@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/stretchr/testify/assert"
+	"github.com/tommed/ducto-featureflags/test"
 	"gopkg.in/yaml.v3"
 	"io"
 	"net/http"
@@ -55,13 +56,14 @@ func TestRunRoot_Serve_E2E(t *testing.T) {
 			file := filepath.Join(dir, "flags.json")
 
 			err := os.WriteFile(file, []byte(`{
-		"my_flag": {
-			"rules": [
-				{ "if": { "env": "prod" }, "value": true }
-			],
-			"enabled": false
-		}
-	}`), 0644)
+				"my_flag": {
+					"variants": `+test.BoolVariantsJSON()+`,
+					"rules": [
+						{ "if": { "env": "prod" }, "variant": "yes" }
+					],
+					"defaultVariant": "no"
+				}
+			}`), 0644)
 			assert.NoError(t, err)
 
 			// Use a unique port to avoid collisions
@@ -72,7 +74,7 @@ func TestRunRoot_Serve_E2E(t *testing.T) {
 			}()
 
 			// Give the server a moment to start
-			time.Sleep(500 * time.Millisecond)
+			time.Sleep(100 * time.Millisecond)
 
 			// Make a request
 			resp, err := http.Get(fmt.Sprintf("http://localhost:%s/api/flags%s?key=my_flag&env=prod",
@@ -86,7 +88,7 @@ func TestRunRoot_Serve_E2E(t *testing.T) {
 			_ = tt.args.decoder(body, &result)
 
 			assert.Equal(t, http.StatusOK, resp.StatusCode)
-			assert.Equal(t, true, result["enabled"])
+			assert.Equal(t, true, result["value"])
 		})
 	}
 }

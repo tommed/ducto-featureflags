@@ -1,13 +1,17 @@
 {
   "experiment": {
+    "variants": {
+      "yes": true,
+      "no": false
+    },
     "rules": [
       {
         "percent": 20,
         "seed": "user_id",
         "seed_hash": "sha256",
-        "value": true
+        "variant": "yes"
       }
     ],
-    "enabled": false
+    "defaultVariant": "no"
   }
 }

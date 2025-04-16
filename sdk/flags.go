@@ -2,44 +2,60 @@ package sdk
 
 // Flag represents a single feature flag definition
 type Flag struct {
-	Enabled *bool  `json:"enabled,omitempty"` // Static fallback/default
-	Rules   []Rule `json:"rules,omitempty"`   // Optional targeting logic
-	// Future: rollout %, conditions, etc.
+	Disabled       bool                   `json:"disabled,omitempty" yaml:"disabled,omitempty"`
+	DefaultVariant string                 `json:"defaultVariant" yaml:"defaultVariant"`
+	Variants       map[string]interface{} `json:"variants" yaml:"variants"`
+	Rules          []VariantRule          `json:"rules,omitempty" yaml:"rules,omitempty"`
 }
 
-type Rule struct {
-	If    map[string]string `json:"if,omitempty" yaml:"if,omitempty"`
-	Value bool              `json:"value"`
-	// Optional targeting
-	Percent  *int   `json:"percent,omitempty" yaml:"percent,omitempty"`     // 0–100
-	Seed     string `json:"seed,omitempty" yaml:"seed,omitempty"`           // key in context
-	SeedHash string `json:"seed_hash,omitempty" yaml:"seed_hash,omitempty"` // e.g. "sha256", "fnv"
+// VariantRule is our v2 rule which is OpenFeature compatible and uses 'variants'
+type VariantRule struct {
+	If       map[string]string `json:"if,omitempty" yaml:"if,omitempty"`
+	Variant  string            `json:"variant" yaml:"variant"` // name of the variant to use
+	Percent  *int              `json:"percent,omitempty" yaml:"percent,omitempty"`
+	Seed     string            `json:"seed,omitempty" yaml:"seed,omitempty"`
+	SeedHash string            `json:"seed_hash,omitempty" yaml:"seed_hash,omitempty"` // optional: "sha256"
 }
 
 type EvalContext map[string]string
 
 // Evaluate performs rule-based or fallback evaluation
-func (f Flag) Evaluate(ctx EvalContext) bool {
-	// Check rules first
+// Evaluate resolves the flag to its chosen variant value
+// File: sdk/flag.go or sdk/eval.go (your call)
+// Flag.Evaluate now returns (variant, value, ok, matched)
+func (f Flag) Evaluate(ctx EvalContext) (string, interface{}, bool, bool) {
 	for _, rule := range f.Rules {
-		if ruleMatches(rule.If, ctx, rule) {
-			return rule.Value
+		if ruleMatches(rule, ctx) {
+			// resolve variant name and value
+			if rule.Variant != "" {
+				val, ok := f.Variants[rule.Variant]
+				if !ok {
+					return rule.Variant, nil, false, true // matched rule, but invalid variant
+				}
+				return rule.Variant, val, true, true // success, from rule
+			}
+			// fallback to simple value (no named variant)
+			return "", rule.Variant, true, true
 		}
 	}
-	// Fallback to Enabled
-	if f.Enabled != nil {
-		return *f.Enabled
+
+	// fallback to default variant
+	val, ok := f.Variants[f.DefaultVariant]
+	if !ok {
+		return f.DefaultVariant, nil, false, false // fallback failed
 	}
-	return false
+	return f.DefaultVariant, val, true, false // success, from default
 }
 
-func ruleMatches(conditions map[string]string, ctx EvalContext, rule Rule) bool {
-	for k, v := range conditions {
+func ruleMatches(rule VariantRule, ctx EvalContext) bool {
+	// Match conditions
+	for k, v := range rule.If {
 		if ctx[k] != v {
 			return false
 		}
 	}
-	// Handle percent rule (optional)
+
+	// Match percent rollout (optional)
 	if rule.Percent != nil {
 		if *rule.Percent <= 0 {
 			return false
@@ -50,7 +66,7 @@ func ruleMatches(conditions map[string]string, ctx EvalContext, rule Rule) bool 
 		}
 		seedVal, ok := ctx[seedKey]
 		if !ok {
-			// Fallback: if seed is missing, and we're asking for hostname, try env
+			// Fallback to hostname if seed is "HOSTNAME"
 			if seedKey == "HOSTNAME" {
 				seedVal = getHostname()
 				if seedVal == "" {
@@ -60,8 +76,10 @@ func ruleMatches(conditions map[string]string, ctx EvalContext, rule Rule) bool 
 				return false
 			}
 		}
+
 		percent := hashToPercent(seedVal, rule.SeedHash)
 		return percent < *rule.Percent
 	}
+
 	return true
 }

@@ -50,8 +50,18 @@ func Run(args []string, stdout, stderr io.Writer) int {
 	}
 
 	ctx := parseContext(ctxFlags)
-	result := store.IsEnabled(key, ctx)
-	fmt.Fprintf(stdout, "Flag %q is %v\n", key, result)
+	flagFromStore, ok := store.Get(key)
+	if !ok {
+		fmt.Fprintf(stderr, "failed to get flag: %v", err)
+		return 1
+	}
+	variant, rawVal, ok, matched := flagFromStore.Evaluate(ctx)
+	if !ok {
+		fmt.Fprintf(stderr, "failed to evaluate flag: %v", err)
+		return 1
+	}
+
+	fmt.Fprintf(stdout, "Flag %q is variant %s = %v (matched=%v)\n", key, variant, rawVal, matched)
 	return 0
 }
 

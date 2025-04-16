@@ -1,10 +1,11 @@
 openapi: 3.1.0
 info:
   title: Ducto Feature Flags API
-  version: 1.0.0
+  version: 2.0.0
   description: |
     A lightweight feature flag API served via the `ducto-flags serve` CLI.
-    Supports environment-aware flag evaluation, secure access, and conditional responses via `304 Not Modified`.
+    Supports multi-variant evaluation, context-based targeting, secure access,
+    percentage rollout, and 304-based caching via `If-Modified-Since`.
 
 servers:
   - url: http://localhost:8080
@@ -13,10 +14,10 @@ servers:
 paths:
   /api/flags:
     get:
-      summary: Get all feature flags or evaluate a single flag
+      summary: Get all flags or evaluate a single flag
       description: >
-        Returns either all available flags (definition form), or evaluates a single flag for a given context.
-        Supports optional `If-Modified-Since` for caching, and bearer token authentication if enabled.
+        If a `key` is provided, returns the resolved value of that flag for a given evaluation context.
+        Otherwise returns all loaded flag definitions.
       parameters:
         - name: key
           in: query
@@ -40,29 +41,32 @@ paths:
         - name: env
           in: query
           required: false
-          description: Optional context key (used if evaluating)
+          description: Optional context key for targeting
           schema:
             type: string
         - name: user_id
           in: query
           required: false
-          description: Optional context key (used if evaluating)
+          description: Optional context key used in rollout strategies
+          schema:
+            type: string
+        - name: group
+          in: query
+          required: false
+          description: Optional context key used in targeting rules
           schema:
             type: string
       responses:
         "200":
-          description: Successful response with flag(s)
+          description: Successful response with evaluation result or all flags
           content:
             application/json:
               schema:
                 oneOf:
-                  - type: object
-                    properties:
-                      enabled:
-                        type: boolean
+                  - $ref: "#/components/schemas/EvaluationResult"
                   - type: object
                     additionalProperties:
-                      $ref: '#/components/schemas/Flag'
+                      $ref: "#/components/schemas/Flag"
         "304":
           description: No changes since last check (based on `If-Modified-Since`)
         "401":
@@ -70,14 +74,55 @@ paths:
 
 components:
   schemas:
+    EvaluationResult:
+      type: object
+      properties:
+        variant:
+          type: string
+        value:
+          description: The resolved flag value
+        reason:
+          type: string
+          enum: [FALLBACK, TARGETING_MATCH, ERROR]
+        error:
+          type: string
+          nullable: true
+
     Flag:
       type: object
       properties:
         enabled:
           type: boolean
+        defaultVariant:
+          type: string
+        variants:
+          type: object
+          additionalProperties: true
         rules:
           type: array
           items:
-            type: object
-        description:
+            $ref: "#/components/schemas/Rule"
+
+    Rule:
+      type: object
+      properties:
+        if:
+          type: object
+          additionalProperties:
+            type: string
+          description: Matching conditions (key-value)
+        value:
+          description: Resolved value if rule matches
+        variant:
           type: string
+          description: "Optional: variant name if using multi-variants"
+        percent:
+          type: integer
+          minimum: 0
+          maximum: 100
+        seed:
+          type: string
+          description: Context key to seed the rollout hash
+        seed_hash:
+          type: string
+          enum: [sha256, fnv]

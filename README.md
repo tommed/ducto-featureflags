@@ -10,10 +10,11 @@
 [![CI](https://github.com/tommed/ducto-featureflags/actions/workflows/ci.yml/badge.svg)](https://github.com/tommed/ducto-featureflags/actions/workflows/ci.yml)
 [![codecov](https://codecov.io/gh/tommed/ducto-featureflags/branch/main/graph/badge.svg)](https://codecov.io/gh/tommed/ducto-featureflags)
 
-> Lightweight, embeddable, and pluggable feature flag engine for Go — designed for pipelines, microservices, and event-driven systems.
+> Lightweight, embeddable, and pluggable **[OpenFeature](https://openfeature.dev/) compatible** feature flag engine for 
+> Go. Designed for pipelines, microservices, and event-driven systems.
 
 ---
-## ✨ What is Ducto-FeatureFlags?
+## ✨ What is Ducto Feature Flags?
 
 `ducto-featureflags` is a minimalist feature flag manager built in Go. It was designed as a reusable component for:
 - Data transformation pipelines (like [Ducto](https://github.com/tommed))
@@ -26,6 +27,10 @@ It supports both static file-based flags and dynamic backends (coming soon), and
 - A **CLI for testing**
 - A **preprocessor plugin** in the [ducto-orchestrator](https://github.com/tommed/ducto-orchestrator)
 
+Please note that Ducto Feature Flags are **not** compliant with [flagd](https://flagd.dev/) because we support
+nested conditional statements, which _cannot_ be reduced to flagd's simpler conditional system.
+Once flagd can support nested conditionals like 'and' and 'or', we will provide support. 
+
 ---
 ## ✅ Features
 
@@ -35,18 +40,21 @@ It supports both static file-based flags and dynamic backends (coming soon), and
 - 🌐 Future: HTTP / Redis / Consul backends
 - 🔓 MIT licensed and reusable in other OSS projects
 
+[View the Specifications here](./docs/specs.md).
+
 ---
 ## 🔧 Example Flag File
 
 The simplest possible flag file is static like so:
 ```json
 {
-    "new_ui": {
-      "enabled": true
+  "ui": {
+    "variants": {
+      "beta": true,
+      "stable": false
     },
-    "beta_mode": {
-      "enabled": false
-    }
+    "defaultVariant": "stable"
+  }
 }
 ```
 
@@ -54,11 +62,15 @@ To make this more dynamic, you can add rules based on an `EvalContext`:
 ```json
 {
     "new_ui": {
+      "variants": {
+        "beta": true,
+        "stable": false
+      },
+      "defaultVariant": "stable",
       "rules": [
-        { "if": { "env": "prod", "group": "beta" }, "value": true },
-        { "if": { "env": "prod" }, "value": false }
-      ],
-      "enabled": true
+        { "if": { "env": "prod", "group": "beta" }, "variant": "beta" },
+        { "if": { "env": "prod" }, "variant": "stable" }
+      ]
     }
 }
 ```
@@ -69,7 +81,8 @@ You can also make use of YAML files, like this [example here](./examples/04-with
 ## 🧑‍💻 Usage (SDK)
 
 ```golang
-store, _ := featureflags.NewStoreFromFile("flags.json")
+store, err := featureflags.NewStoreFromFile("flags.json")
+// assert no error
 
 if store.IsEnabled("new_ui", featureflags.EvalContext{}) {
     // Enable experimental flow
@@ -77,7 +90,16 @@ if store.IsEnabled("new_ui", featureflags.EvalContext{}) {
 ```
 
 ---
-## 📦 Install
+## 📦 Use as an OpenFeature Provider
+
+```bash
+go get -u github.com/tommed/ducto-featureflags
+```
+
+[Check our OpenFeature example here](./openfeature/example_provider_test.go)
+
+---
+## 📦 Install CLI
 
 ```bash
 go install github.com/tommed/ducto-featureflags/cmd/ducto-flags@latest
@@ -101,6 +123,8 @@ ducto-flags serve -file flags.json [-token secret-123]
 - [x] JSON file
 - [x] YAML file
 - [x] HTTP endpoint
+- [x] OpenFeature compatibility
+- [x] OpenFeature provider
 - [ ] Redis
 - [ ] Google Firestore
 - [ ] Env var overrides

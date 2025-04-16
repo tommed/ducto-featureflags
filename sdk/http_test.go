@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"github.com/stretchr/testify/assert"
+	"github.com/tommed/ducto-featureflags/test"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -15,7 +16,8 @@ func TestNewStoreFromURL_JSON(t *testing.T) {
 	}
 	payload := `{
 		"new_ui": {
-			"enabled": true
+			"variants": ` + test.BoolVariantsJSON() + `,
+			"defaultVariant": "yes"
 		}
 	}`
 
@@ -29,7 +31,12 @@ func TestNewStoreFromURL_JSON(t *testing.T) {
 	ctx := context.Background()
 	store, err := NewStoreFromURL(ctx, srv.URL+"/flags", "test-token")
 	assert.NoError(t, err)
-	assert.True(t, store.IsEnabled("new_ui", evalContext))
+
+	newUIFlag, ok := store.Get("new_ui")
+	assert.True(t, ok)
+	_, newUIVal, _, _ := newUIFlag.Evaluate(evalContext)
+
+	assert.True(t, newUIVal.(bool))
 }
 
 func TestNewStoreFromURL_Errors(t *testing.T) {
@@ -74,11 +81,14 @@ func TestNewStoreFromURL_Errors(t *testing.T) {
 func TestNewStoreFromURL_YAML(t *testing.T) {
 	payload := `
 canary:
-  enabled: false
+  variants:
+    yes: true
+    no: false
+  defaultVariant: no
   rules:
   - if:
       env: prod
-    value: true
+    variant: yes
 `
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -91,8 +101,13 @@ canary:
 	store, err := NewStoreFromURL(ctx, srv.URL+"/flags.yaml", "")
 	assert.NoError(t, err)
 
-	prodEnabled := store.IsEnabled("canary", EvalContext{"env": "prod"})
-	devEnabled := store.IsEnabled("canary", EvalContext{"env": "dev"})
-	assert.True(t, prodEnabled, "prod")
-	assert.False(t, devEnabled, "dev")
+	prodCtx := EvalContext{"env": "prod"}
+	devCtx := EvalContext{"env": "dev"}
+
+	prodEnabledFlag, _ := store.Get("canary")
+	devEnabledFlag, _ := store.Get("canary")
+	_, prodEnabled, _, _ := prodEnabledFlag.Evaluate(prodCtx)
+	_, devEnabled, _, _ := devEnabledFlag.Evaluate(devCtx)
+	assert.True(t, prodEnabled.(bool), "prod")
+	assert.False(t, devEnabled.(bool), "dev")
 }

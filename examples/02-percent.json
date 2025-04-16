@@ -1,12 +1,16 @@
 {
   "new_ui": {
+    "variants": {
+      "yes": true,
+      "no": false
+    },
     "rules": [
       {
         "percent": 5,
         "seed": "user_id",
-        "value": true
+        "variant": "yes"
       }
     ],
-    "enabled": false
+    "defaultVariant": "no"
   }
 }

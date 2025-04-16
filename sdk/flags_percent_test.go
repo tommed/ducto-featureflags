@@ -10,22 +10,24 @@ import (
 func TestPercentRollout(t *testing.T) {
 	ten := 10
 
-	rule := Rule{
+	rule := VariantRule{
 		Percent: &ten,
 		Seed:    "user_id",
-		Value:   true,
+		Variant: "on",
 	}
 
 	f := Flag{
-		Rules:   []Rule{rule},
-		Enabled: boolPtr(false), // fallback
+		Variants:       boolVariants,
+		Rules:          []VariantRule{rule},
+		DefaultVariant: "off",
 	}
 
 	match := 0
 	total := 1000
 	for i := 0; i < total; i++ {
 		uid := fmt.Sprintf("user-%d", i)
-		if f.Evaluate(EvalContext{"user_id": uid}) {
+		_, val, ok, _ := f.Evaluate(EvalContext{"user_id": uid})
+		if ok && val == true {
 			match++
 		}
 	}
@@ -38,37 +40,49 @@ func TestPercentRollout(t *testing.T) {
 func TestPercentWithSeedHashSHA256(t *testing.T) {
 	percent := 100
 	flag := Flag{
-		Rules: []Rule{{
+		Variants: boolVariants,
+		Rules: []VariantRule{{
 			Percent:  &percent,
 			Seed:     "user_id",
 			SeedHash: "sha256",
-			Value:    true,
+			Variant:  "on",
 		}},
+		DefaultVariant: "off",
 	}
 
 	ctx := EvalContext{"user_id": "abc123"}
-	assert.True(t, flag.Evaluate(ctx)) // Always true with 100%
 
-	// Use a value that maps to >50% with sha256
+	_, val, ok, _ := flag.Evaluate(ctx)
+	assert.True(t, ok)
+	assert.Equal(t, true, val) // 100% should always be true
+
+	// Now test 50% rollout
 	percent = 50
 	flag.Rules[0].Percent = &percent
-	result := flag.Evaluate(ctx)
 
-	t.Logf("Result for abc123 (sha256): %v", result)
+	_, val, ok, _ = flag.Evaluate(ctx)
+	t.Logf("Result for abc123 (sha256): %v", val)
+	assert.True(t, ok) // still should resolve, just might be false depending on hash
 }
 
 func TestPercentFallbackToHostname(t *testing.T) {
 	percent := 100
-	rule := Rule{
+	rule := VariantRule{
 		Percent: &percent,
 		Seed:    "HOSTNAME",
-		Value:   true,
-	}
-	flag := Flag{
-		Rules: []Rule{rule},
+		Variant: "on",
 	}
 
-	// Remove HOSTNAME from context
+	flag := Flag{
+		Variants:       boolVariants,
+		Rules:          []VariantRule{rule},
+		DefaultVariant: "off",
+	}
+
+	// No HOSTNAME in context — should fall back to env-hostname
 	ctx := EvalContext{}
-	assert.Equal(t, true, flag.Evaluate(ctx)) // Should fall back to env
+	_, val, ok, _ := flag.Evaluate(ctx)
+
+	assert.True(t, ok)
+	assert.Equal(t, true, val)
 }

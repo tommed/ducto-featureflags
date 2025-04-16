@@ -16,6 +16,13 @@ import (
 	"github.com/tommed/ducto-featureflags/sdk"
 )
 
+type ResolutionResponse struct {
+	Variant string      `json:"variant"`
+	Value   interface{} `json:"value"`
+	Reason  string      `json:"reason"`
+	Error   string      `json:"error,omitempty"`
+}
+
 //goland:noinspection GoUnhandledErrorResult
 func Serve(args []string, stdout, stderr io.Writer) int {
 	fs := flag.NewFlagSet("serve", flag.ExitOnError)
@@ -78,8 +85,27 @@ func Serve(args []string, stdout, stderr io.Writer) int {
 				}
 
 				// Determine what to send back
-				result := store.IsEnabled(key, ctx)
-				encode(w, map[string]bool{"enabled": result})
+				storeFlag, ok := store.Get(key)
+				if !ok {
+					encode(w, ResolutionResponse{
+						Variant: "",
+						Value:   false,
+						Reason:  "ERROR",
+						Error:   "flag not found",
+					})
+					return
+				}
+
+				variant, val, _, matched := storeFlag.Evaluate(ctx)
+				resp := ResolutionResponse{
+					Variant: variant,
+					Value:   val,
+					Reason:  "FALLBACK",
+				}
+				if matched {
+					resp.Reason = "TARGETING_MATCH"
+				}
+				encode(w, resp)
 				return
 			}
 

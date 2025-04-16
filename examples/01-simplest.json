@@ -1,4 +1,9 @@
 {
-    "new_ui": { "enabled": true },
-    "beta_mode": { "enabled": false }
+    "ui": {
+        "variants": {
+            "beta": true,
+            "stable": false
+        },
+        "defaultVariant": "stable"
+    }
 }

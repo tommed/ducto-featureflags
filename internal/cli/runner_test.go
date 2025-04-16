@@ -3,6 +3,7 @@ package cli
 
 import (
 	"bytes"
+	"github.com/tommed/ducto-featureflags/test"
 	"io"
 	"os"
 	"path/filepath"
@@ -22,7 +23,7 @@ func writeTempFlags(t *testing.T, json string) string {
 
 func TestRun_QuerySingleFlag(t *testing.T) {
 	flags := `{
-		"beta": { "enabled": true }
+		"beta": { "variants": ` + test.BoolVariantsJSON() + `, "defaultVariant": "yes" }
 	}`
 	path := writeTempFlags(t, flags)
 
@@ -31,7 +32,7 @@ func TestRun_QuerySingleFlag(t *testing.T) {
 	code := Run([]string{"-file", path, "-key", "beta"}, stdout, stderr)
 
 	assert.Equal(t, 0, code)
-	assert.Contains(t, stdout.String(), `"beta" is true`)
+	assert.Contains(t, stdout.String(), `"beta" is variant yes = true`)
 }
 
 func TestRun_MissingKeyAndList(t *testing.T) {
@@ -88,10 +89,11 @@ func TestRun_UnknownFlag(t *testing.T) {
 func TestRun_WithContextEvaluation(t *testing.T) {
 	flags := `{
 		"canary_mode": {
+			"variants": ` + test.BoolVariantsJSON() + `,
 			"rules": [
-				{ "if": { "user_group": "beta" }, "value": true }
+				{ "if": { "user_group": "beta" }, "variant": "yes" }
 			],
-			"enabled": false
+			"defaultVariant": "no"
 		}
 	}`
 
@@ -107,5 +109,5 @@ func TestRun_WithContextEvaluation(t *testing.T) {
 	}, stdout, stderr)
 
 	assert.Equal(t, 0, code)
-	assert.Contains(t, stdout.String(), `"canary_mode" is true`)
+	assert.Contains(t, stdout.String(), `"canary_mode" is variant yes = true`)
 }

@@ -1,7 +1,7 @@
 package sdk
 
 type AnyStore interface {
-	IsEnabled(key string, ctx EvalContext) bool
+	Get(key string) (Flag, bool) // For OpenFeature compatibility
 	AllFlags() map[string]Flag
 }
 
@@ -14,13 +14,10 @@ func NewStore(flags map[string]Flag) AnyStore {
 	return &Store{flags: flags}
 }
 
-// IsEnabled returns true if the flag is defined and enabled
-func (s *Store) IsEnabled(key string, ctx EvalContext) bool {
-	flag, ok := s.flags[key]
-	if !ok {
-		return false
-	}
-	return flag.Evaluate(ctx)
+// Get just returns the Flag now, so doesn't need EvalContext at this stage
+func (s *Store) Get(key string) (Flag, bool) {
+	f, ok := s.flags[key]
+	return f, ok
 }
 
 // AllFlags returns the raw flag map

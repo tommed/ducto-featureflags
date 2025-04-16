@@ -2,6 +2,7 @@ package sdk
 
 import (
 	"context"
+	"github.com/tommed/ducto-featureflags/test"
 	"os"
 	"path/filepath"
 	"testing"
@@ -34,15 +35,14 @@ func TestWatchingStore_ReloadsOnChange(t *testing.T) {
 		t.Skip("skipping test in short mode.")
 	}
 
-	// Assemble
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
+
 	tmp := t.TempDir()
 	file := filepath.Join(tmp, "flags.json")
 
-	// Write initial file
 	writeTestFlags(t, file, `{
-		"new_ui": { "enabled": false }
+		"new_ui": { "variants": `+test.BoolVariantsJSON()+`, "defaultVariant": "no" }
 	}`)
 
 	provider := NewFileProvider(file)
@@ -50,19 +50,27 @@ func TestWatchingStore_ReloadsOnChange(t *testing.T) {
 	err := store.Start()
 	assert.NoError(t, err)
 
-	// Wait for watcher to be fully registered
 	time.Sleep(200 * time.Millisecond)
 
-	assert.False(t, store.IsEnabled("new_ui", EvalContext{}))
+	flag, ok := store.Get("new_ui")
+	assert.True(t, ok)
 
-	// Modify file to flip flag to true
+	_, val, ok, _ := flag.Evaluate(EvalContext{})
+	assert.True(t, ok)
+	assert.Equal(t, false, val)
+
 	writeTestFlags(t, file, `{
-		"new_ui": { "enabled": true }
+		"new_ui": { "variants": `+test.BoolVariantsJSON()+`, "defaultVariant": "yes" }
 	}`)
 
-	// Wait for reload (polling version)
 	time.Sleep(1 * time.Second)
-	assert.True(t, store.IsEnabled("new_ui", EvalContext{}))
+
+	flag, ok = store.Get("new_ui")
+	assert.True(t, ok)
+
+	_, val, ok, _ = flag.Evaluate(EvalContext{})
+	assert.True(t, ok)
+	assert.Equal(t, true, val)
 }
 
 func TestWatchingStore_HandlesBadFileGracefully(t *testing.T) {
@@ -70,14 +78,14 @@ func TestWatchingStore_HandlesBadFileGracefully(t *testing.T) {
 		t.Skip("skipping test in short mode.")
 	}
 
-	// Assemble
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
+
 	tmp := t.TempDir()
 	file := filepath.Join(tmp, "flags.json")
 
 	writeTestFlags(t, file, `{
-		"test": { "enabled": true }
+		"test": { "variants": `+test.BoolVariantsJSON()+`, "defaultVariant": "yes" }
 	}`)
 
 	provider := NewFileProvider(file)
@@ -85,9 +93,13 @@ func TestWatchingStore_HandlesBadFileGracefully(t *testing.T) {
 	err := store.Start()
 	assert.NoError(t, err)
 
-	// Break the file
 	writeTestFlags(t, file, `{"flags": BROKEN_JSON`)
 
-	// Did not replace the flags with broken ones
-	assert.True(t, store.IsEnabled("test", EvalContext{}))
+	// Should continue serving last good config
+	flag, ok := store.Get("test")
+	assert.True(t, ok)
+
+	_, val, ok, _ := flag.Evaluate(EvalContext{})
+	assert.True(t, ok)
+	assert.Equal(t, true, val)
 }

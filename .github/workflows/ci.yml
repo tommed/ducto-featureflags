@@ -4,12 +4,12 @@ on:
   push:
     branches:
     - 'main'
-    - 'develop'
+    - 'dev'
     - 'feature/**'
   pull_request:
     branches:
     - 'main'
-    - 'develop'
+    - 'dev'
 
 jobs:
   test:
@@ -39,7 +39,7 @@ jobs:
         uses: codecov/codecov-action@v4
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
-          files: ./coverage.out
+          files: ./docs/coverage.out
           flags: unittests
           name: codecov-coverage
           fail_ci_if_error: true
@@ -48,12 +48,12 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: coverage-report
-          path: coverage.out
+          path: docs/coverage.out
 
       - name: Deploy Coverage HTML to GitHub Pages
         uses: peaceiris/actions-gh-pages@v3
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
-          publish_dir: .
+          publish_dir: docs
           publish_branch: gh-pages
           allow_empty_commit: false

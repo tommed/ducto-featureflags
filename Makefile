@@ -2,8 +2,8 @@
 # Configuration
 # ----------------------
 
-COVERAGE_OUT=coverage.out
-COVERAGE_HTML=coverage.html
+COVERAGE_OUT=docs/coverage.out
+COVERAGE_HTML=docs/coverage.html
 GO=go
 LINTER=golangci-lint
 LINTER_REMOTE=github.com/golangci/golangci-lint/cmd/golangci-lint@latest

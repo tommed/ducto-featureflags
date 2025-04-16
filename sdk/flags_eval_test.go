@@ -1,11 +1,17 @@
 package sdk
 
 import (
+	"github.com/tommed/ducto-featureflags/test"
 	"path/filepath"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 )
+
+var boolVariants = map[string]interface{}{
+	"on":  true,
+	"off": false,
+}
 
 func TestYAMLFlagFile_EvaluatesCorrectly(t *testing.T) {
 	path := filepath.Join("..", "examples", "04-with_rules.yaml")
@@ -13,84 +19,119 @@ func TestYAMLFlagFile_EvaluatesCorrectly(t *testing.T) {
 	store, err := NewStoreFromFile(path)
 	assert.NoError(t, err)
 
+	flag, found := store.Get("new_ui")
+	assert.True(t, found)
+
 	// Matching rule
-	result := store.IsEnabled("new_ui", EvalContext{
-		"env":   "prod",
-		"group": "beta",
+	variant, val, ok, _ := flag.Evaluate(EvalContext{
+		"env": "beta",
 	})
-	assert.True(t, result)
+	assert.Equal(t, "beta", variant)
+	assert.Equal(t, 2, val)
+	assert.True(t, ok, "did not evaluate flag")
 
 	// Second rule match
-	result = store.IsEnabled("new_ui", EvalContext{
+	variant, val, ok, _ = flag.Evaluate(EvalContext{
 		"env": "prod",
 	})
-	assert.False(t, result)
+	assert.True(t, ok)
+	assert.Equal(t, "stable", variant)
+	assert.Equal(t, 4, val)
 
-	// No rule match, fallback
-	result = store.IsEnabled("new_ui", EvalContext{
+	// No rule match, fallback to enabled
+	variant, val, ok, _ = flag.Evaluate(EvalContext{
 		"env": "dev",
 	})
-	assert.True(t, result)
+	assert.True(t, ok)
+	assert.Equal(t, "dev", variant)
+	assert.Equal(t, 0, val)
 
 	// Missing flag
-	result = store.IsEnabled("not_there", EvalContext{})
-	assert.False(t, result)
+	_, found = store.Get("not_there")
+	assert.False(t, found)
 }
 
 func TestFlagEvaluation_StaticOnly(t *testing.T) {
-	f := Flag{Enabled: boolPtr(true)}
-	assert.True(t, f.Evaluate(EvalContext{}))
+	f := Flag{
+		Variants:       boolVariants,
+		DefaultVariant: "on",
+	}
+	_, val, ok, _ := f.Evaluate(EvalContext{})
+	assert.True(t, ok)
+	assert.Equal(t, true, val)
 
-	f = Flag{Enabled: boolPtr(false)}
-	assert.False(t, f.Evaluate(EvalContext{}))
+	f.DefaultVariant = "off"
+	_, val, ok, _ = f.Evaluate(EvalContext{})
+	assert.True(t, ok)
+	assert.Equal(t, false, val)
 }
 
 func TestFlagEvaluation_WithRules(t *testing.T) {
 	f := Flag{
-		Rules: []Rule{
-			{If: map[string]string{"env": "prod"}, Value: true},
-			{If: map[string]string{"env": "dev"}, Value: false},
+		Variants: boolVariants,
+		Rules: []VariantRule{
+			{If: map[string]string{"env": "prod"}, Variant: "on"},
+			{If: map[string]string{"env": "dev"}, Variant: "off"},
 		},
-		Enabled: boolPtr(false), // fallback
+		DefaultVariant: "off",
 	}
 
-	assert.True(t, f.Evaluate(EvalContext{"env": "prod"}))
-	assert.False(t, f.Evaluate(EvalContext{"env": "dev"}))
-	assert.False(t, f.Evaluate(EvalContext{"env": "staging"}))
+	_, val, ok, _ := f.Evaluate(EvalContext{"env": "prod"})
+	assert.True(t, ok)
+	assert.Equal(t, true, val)
+
+	_, val, ok, _ = f.Evaluate(EvalContext{"env": "dev"})
+	assert.True(t, ok)
+	assert.Equal(t, false, val)
+
+	_, val, ok, _ = f.Evaluate(EvalContext{"env": "staging"})
+	assert.True(t, ok)
+	assert.Equal(t, false, val) // fallback
 }
 
 func TestStoreEvaluate(t *testing.T) {
 	store, err := NewStoreFromBytesWithFormat([]byte(`{
 		"new_ui": {
+			"variants": `+test.BoolVariantsJSON()+`,
 			"rules": [
-				{ "if": { "env": "prod" }, "value": true }
+				{ "if": { "env": "prod" }, "variant": "yes" }
 			],
-			"enabled": false
+			"defaultVariant": "no"
 		}
 	}`), "json")
 	assert.NoError(t, err)
 
-	assert.True(t, store.IsEnabled("new_ui", EvalContext{"env": "prod"}))
-	assert.False(t, store.IsEnabled("new_ui", EvalContext{"env": "dev"}))
-	assert.False(t, store.IsEnabled("missing", EvalContext{"env": "prod"}))
+	flag, found := store.Get("new_ui")
+	assert.True(t, found)
+
+	_, val, ok, _ := flag.Evaluate(EvalContext{"env": "prod"})
+	assert.True(t, ok)
+	assert.Equal(t, true, val)
+
+	_, val, ok, _ = flag.Evaluate(EvalContext{"env": "dev"})
+	assert.True(t, ok)
+	assert.Equal(t, false, val)
+
+	_, found = store.Get("missing")
+	assert.False(t, found)
 }
 
 func TestFlagEvaluation_FallbackToFalse(t *testing.T) {
 	// No rules, no enabled
 	f := Flag{}
-	result := f.Evaluate(EvalContext{"env": "prod"})
-	assert.False(t, result)
+	_, val, ok, _ := f.Evaluate(EvalContext{"env": "prod"})
+	assert.False(t, ok)
+	assert.Nil(t, val)
 
 	// Rules don't match, and no enabled fallback
 	f = Flag{
-		Rules: []Rule{
-			{If: map[string]string{"env": "qa"}, Value: true},
+		Variants:       boolVariants,
+		DefaultVariant: "off",
+		Rules: []VariantRule{
+			{If: map[string]string{"env": "qa"}, Variant: "on"},
 		},
 	}
-	result = f.Evaluate(EvalContext{"env": "prod"})
-	assert.False(t, result)
-}
-
-func boolPtr(b bool) *bool {
-	return &b
+	_, val, ok, _ = f.Evaluate(EvalContext{"env": "prod"})
+	assert.True(t, ok)
+	assert.Equal(t, false, val)
 }

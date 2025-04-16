@@ -25,16 +25,16 @@ func TestNewStoreFromBytes(t *testing.T) {
 	// feature_a
 	flag, ok := store.Get("feature_a")
 	assert.True(t, ok)
-	_, val, ok, _ := flag.Evaluate(ctx)
-	assert.True(t, ok)
-	assert.Equal(t, true, val)
+	result := flag.Evaluate(ctx)
+	assert.True(t, result.OK)
+	assert.Equal(t, true, result.Value)
 
 	// feature_b
 	flag, ok = store.Get("feature_b")
 	assert.True(t, ok)
-	_, val, ok, _ = flag.Evaluate(ctx)
-	assert.True(t, ok)
-	assert.Equal(t, false, val)
+	result = flag.Evaluate(ctx)
+	assert.True(t, result.OK)
+	assert.Equal(t, false, result.Value)
 
 	// nonexistent
 	_, ok = store.Get("nonexistent")
@@ -67,9 +67,9 @@ func TestNewStoreFromFile(t *testing.T) {
 
 	flag, ok := store.Get("screen_mode")
 	assert.True(t, ok)
-	_, val, ok, _ := flag.Evaluate(EvalContext{})
-	assert.True(t, ok)
-	assert.Equal(t, true, val)
+	result := flag.Evaluate(EvalContext{})
+	assert.True(t, result.OK)
+	assert.Equal(t, true, result.Value)
 }
 
 func TestNewStoreFromFile_BadFile(t *testing.T) {
@@ -90,14 +90,14 @@ func TestAllFlags(t *testing.T) {
 	// Check x
 	xFlag, xOk := flags["x"]
 	assert.True(t, xOk)
-	_, xVal, xOk, _ := xFlag.Evaluate(EvalContext{})
-	assert.True(t, xOk)
-	assert.Equal(t, true, xVal.(bool))
+	xResult := xFlag.Evaluate(EvalContext{})
+	assert.True(t, xResult.OK)
+	assert.Equal(t, true, xResult.Value.(bool))
 
 	// Check y
 	yFlag, yOk := flags["y"]
 	assert.True(t, yOk)
-	_, yVal, yOk, _ := yFlag.Evaluate(EvalContext{})
-	assert.True(t, yOk)
-	assert.Equal(t, false, yVal.(bool))
+	yVal := yFlag.Evaluate(EvalContext{})
+	assert.True(t, yVal.OK)
+	assert.Equal(t, false, yVal.Value.(bool))
 }

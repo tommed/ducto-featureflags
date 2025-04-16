@@ -22,8 +22,8 @@ func TestHTTPProvider_Load_Success(t *testing.T) {
 	store, err := p.Load(context.Background())
 	assert.NoError(t, err)
 	f, _ := store.Get("x")
-	_, rawVal, _, _ := f.Evaluate(nil)
-	assert.True(t, rawVal.(bool))
+	result := f.Evaluate(nil)
+	assert.True(t, result.Value.(bool))
 }
 
 func TestHTTPProvider_Load_304(t *testing.T) {
@@ -99,8 +99,8 @@ func TestHTTPProvider_Watch_OnlyFiresOnChange(t *testing.T) {
 	go p.Watch(ctx, func(s *Store) {
 		if s != nil {
 			f, _ := s.Get("feature")
-			_, rawBool, _, _ := f.Evaluate(nil)
-			if rawBool.(bool) {
+			result := f.Evaluate(nil)
+			if result.Value.(bool) {
 				atomic.AddInt32(&hits, 1)
 			}
 		}

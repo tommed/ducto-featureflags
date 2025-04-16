@@ -26,8 +26,8 @@ func TestPercentRollout(t *testing.T) {
 	total := 1000
 	for i := 0; i < total; i++ {
 		uid := fmt.Sprintf("user-%d", i)
-		_, val, ok, _ := f.Evaluate(EvalContext{"user_id": uid})
-		if ok && val == true {
+		result := f.Evaluate(EvalContext{"user_id": uid})
+		if result.OK && result.Value == true {
 			match++
 		}
 	}
@@ -52,17 +52,17 @@ func TestPercentWithSeedHashSHA256(t *testing.T) {
 
 	ctx := EvalContext{"user_id": "abc123"}
 
-	_, val, ok, _ := flag.Evaluate(ctx)
-	assert.True(t, ok)
-	assert.Equal(t, true, val) // 100% should always be true
+	result := flag.Evaluate(ctx)
+	assert.True(t, result.OK)
+	assert.Equal(t, true, result.Value) // 100% should always be true
 
 	// Now test 50% rollout
 	percent = 50
 	flag.Rules[0].Percent = &percent
 
-	_, val, ok, _ = flag.Evaluate(ctx)
-	t.Logf("Result for abc123 (sha256): %v", val)
-	assert.True(t, ok) // still should resolve, just might be false depending on hash
+	result = flag.Evaluate(ctx)
+	t.Logf("Result for abc123 (sha256): %v", result.Value)
+	assert.True(t, result.OK) // still should resolve, just might be false depending on hash
 }
 
 func TestPercentFallbackToHostname(t *testing.T) {
@@ -81,8 +81,8 @@ func TestPercentFallbackToHostname(t *testing.T) {
 
 	// No HOSTNAME in context — should fall back to env-hostname
 	ctx := EvalContext{}
-	_, val, ok, _ := flag.Evaluate(ctx)
+	result := flag.Evaluate(ctx)
 
-	assert.True(t, ok)
-	assert.Equal(t, true, val)
+	assert.True(t, result.OK)
+	assert.Equal(t, true, result.Value)
 }

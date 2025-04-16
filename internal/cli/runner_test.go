@@ -32,7 +32,7 @@ func TestRun_QuerySingleFlag(t *testing.T) {
 	code := Run([]string{"-file", path, "-key", "beta"}, stdout, stderr)
 
 	assert.Equal(t, 0, code)
-	assert.Contains(t, stdout.String(), `"beta" is variant yes = true`)
+	assert.Contains(t, stdout.String(), `"Variant":"yes","Value":true`)
 }
 
 func TestRun_MissingKeyAndList(t *testing.T) {
@@ -109,5 +109,5 @@ func TestRun_WithContextEvaluation(t *testing.T) {
 	}, stdout, stderr)
 
 	assert.Equal(t, 0, code)
-	assert.Contains(t, stdout.String(), `"canary_mode" is variant yes = true`)
+	assert.Contains(t, stdout.String(), `"canary_mode","result":{"Variant":"yes","Value":true`)
 }

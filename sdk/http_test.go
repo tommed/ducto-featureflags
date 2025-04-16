@@ -34,9 +34,9 @@ func TestNewStoreFromURL_JSON(t *testing.T) {
 
 	newUIFlag, ok := store.Get("new_ui")
 	assert.True(t, ok)
-	_, newUIVal, _, _ := newUIFlag.Evaluate(evalContext)
+	result := newUIFlag.Evaluate(evalContext)
 
-	assert.True(t, newUIVal.(bool))
+	assert.True(t, result.Value.(bool))
 }
 
 func TestNewStoreFromURL_Errors(t *testing.T) {
@@ -106,8 +106,8 @@ canary:
 
 	prodEnabledFlag, _ := store.Get("canary")
 	devEnabledFlag, _ := store.Get("canary")
-	_, prodEnabled, _, _ := prodEnabledFlag.Evaluate(prodCtx)
-	_, devEnabled, _, _ := devEnabledFlag.Evaluate(devCtx)
-	assert.True(t, prodEnabled.(bool), "prod")
-	assert.False(t, devEnabled.(bool), "dev")
+	prodEnabled := prodEnabledFlag.Evaluate(prodCtx)
+	devEnabled := devEnabledFlag.Evaluate(devCtx)
+	assert.True(t, prodEnabled.Value.(bool), "prod")
+	assert.False(t, devEnabled.Value.(bool), "dev")
 }

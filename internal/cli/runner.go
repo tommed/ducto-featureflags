@@ -55,13 +55,14 @@ func Run(args []string, stdout, stderr io.Writer) int {
 		fmt.Fprintf(stderr, "failed to get flag: %v", err)
 		return 1
 	}
-	variant, rawVal, ok, matched := flagFromStore.Evaluate(ctx)
-	if !ok {
+	result := flagFromStore.Evaluate(ctx)
+	if !result.OK {
 		fmt.Fprintf(stderr, "failed to evaluate flag: %v", err)
 		return 1
 	}
 
-	fmt.Fprintf(stdout, "Flag %q is variant %s = %v (matched=%v)\n", key, variant, rawVal, matched)
+	resultJSON, _ := json.Marshal(map[string]any{"key": key, "result": result})
+	fmt.Fprintf(stdout, "%s\n", resultJSON)
 	return 0
 }
 

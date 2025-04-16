@@ -96,13 +96,13 @@ func Serve(args []string, stdout, stderr io.Writer) int {
 					return
 				}
 
-				variant, val, _, matched := storeFlag.Evaluate(ctx)
+				result := storeFlag.Evaluate(ctx)
 				resp := ResolutionResponse{
-					Variant: variant,
-					Value:   val,
+					Variant: result.Variant,
+					Value:   result.Value,
 					Reason:  "FALLBACK",
 				}
-				if matched {
+				if result.Matched {
 					resp.Reason = "TARGETING_MATCH"
 				}
 				encode(w, resp)

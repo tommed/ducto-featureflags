@@ -23,24 +23,24 @@ func (p *DuctoProvider) BooleanEvaluation(
 	}
 
 	internalCtx := convertFlattenedContext(evalCtx)
-	variant, val, ok, matched := flagDef.Evaluate(internalCtx)
-	if !ok {
+	result := flagDef.Evaluate(internalCtx)
+	if !result.OK {
 		return openfeature.BoolResolutionDetail{
 			Value: defaultValue,
 			ProviderResolutionDetail: openfeature.ProviderResolutionDetail{
-				Variant:         variant,
+				Variant:         result.Variant,
 				Reason:          openfeature.DefaultReason,
 				ResolutionError: openfeature.NewParseErrorResolutionError("variant not found"),
 			},
 		}
 	}
 
-	b, ok := val.(bool)
+	b, ok := result.Value.(bool)
 	if !ok {
 		return openfeature.BoolResolutionDetail{
 			Value: defaultValue,
 			ProviderResolutionDetail: openfeature.ProviderResolutionDetail{
-				Variant:         variant,
+				Variant:         result.Variant,
 				Reason:          openfeature.DefaultReason,
 				ResolutionError: openfeature.NewTypeMismatchResolutionError("bool"),
 			},
@@ -48,14 +48,14 @@ func (p *DuctoProvider) BooleanEvaluation(
 	}
 
 	reason := openfeature.DefaultReason
-	if matched {
+	if result.Matched {
 		reason = openfeature.TargetingMatchReason
 	}
 
 	return openfeature.BoolResolutionDetail{
 		Value: b,
 		ProviderResolutionDetail: openfeature.ProviderResolutionDetail{
-			Variant: variant,
+			Variant: result.Variant,
 			Reason:  reason,
 		},
 	}

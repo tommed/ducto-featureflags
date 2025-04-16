@@ -23,12 +23,12 @@ func (p *DuctoProvider) IntEvaluation(
 	}
 
 	internalCtx := convertFlattenedContext(evalCtx)
-	variant, val, ok, matched := flagDef.Evaluate(internalCtx)
-	if !ok {
+	result := flagDef.Evaluate(internalCtx)
+	if !result.OK {
 		return openfeature.IntResolutionDetail{
 			Value: defaultValue,
 			ProviderResolutionDetail: openfeature.ProviderResolutionDetail{
-				Variant:         variant,
+				Variant:         result.Variant,
 				Reason:          openfeature.DefaultReason,
 				ResolutionError: openfeature.NewParseErrorResolutionError("variant not found"),
 			},
@@ -36,7 +36,7 @@ func (p *DuctoProvider) IntEvaluation(
 	}
 
 	var n int64
-	switch v := val.(type) {
+	switch v := result.Value.(type) {
 	case int:
 		n = int64(v)
 	case int64:
@@ -47,7 +47,7 @@ func (p *DuctoProvider) IntEvaluation(
 		return openfeature.IntResolutionDetail{
 			Value: defaultValue,
 			ProviderResolutionDetail: openfeature.ProviderResolutionDetail{
-				Variant:         variant,
+				Variant:         result.Variant,
 				Reason:          openfeature.DefaultReason,
 				ResolutionError: openfeature.NewTypeMismatchResolutionError("int"),
 			},
@@ -55,14 +55,14 @@ func (p *DuctoProvider) IntEvaluation(
 	}
 
 	reason := openfeature.DefaultReason
-	if matched {
+	if result.Matched {
 		reason = openfeature.TargetingMatchReason
 	}
 
 	return openfeature.IntResolutionDetail{
 		Value: n,
 		ProviderResolutionDetail: openfeature.ProviderResolutionDetail{
-			Variant: variant,
+			Variant: result.Variant,
 			Reason:  reason,
 		},
 	}
@@ -86,12 +86,12 @@ func (p *DuctoProvider) FloatEvaluation(
 	}
 
 	internalCtx := convertFlattenedContext(evalCtx)
-	variant, val, ok, matched := flagDef.Evaluate(internalCtx)
-	if !ok {
+	result := flagDef.Evaluate(internalCtx)
+	if !result.OK {
 		return openfeature.FloatResolutionDetail{
 			Value: defaultValue,
 			ProviderResolutionDetail: openfeature.ProviderResolutionDetail{
-				Variant:         variant,
+				Variant:         result.Variant,
 				Reason:          openfeature.DefaultReason,
 				ResolutionError: openfeature.NewParseErrorResolutionError("variant not found"),
 			},
@@ -99,7 +99,7 @@ func (p *DuctoProvider) FloatEvaluation(
 	}
 
 	var f float64
-	switch v := val.(type) {
+	switch v := result.Value.(type) {
 	case float64:
 		f = v
 	case float32:
@@ -112,7 +112,7 @@ func (p *DuctoProvider) FloatEvaluation(
 		return openfeature.FloatResolutionDetail{
 			Value: defaultValue,
 			ProviderResolutionDetail: openfeature.ProviderResolutionDetail{
-				Variant:         variant,
+				Variant:         result.Variant,
 				Reason:          openfeature.DefaultReason,
 				ResolutionError: openfeature.NewTypeMismatchResolutionError("float"),
 			},
@@ -120,14 +120,14 @@ func (p *DuctoProvider) FloatEvaluation(
 	}
 
 	reason := openfeature.DefaultReason
-	if matched {
+	if result.Matched {
 		reason = openfeature.TargetingMatchReason
 	}
 
 	return openfeature.FloatResolutionDetail{
 		Value: f,
 		ProviderResolutionDetail: openfeature.ProviderResolutionDetail{
-			Variant: variant,
+			Variant: result.Variant,
 			Reason:  reason,
 		},
 	}

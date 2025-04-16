@@ -23,12 +23,12 @@ func (p *DuctoProvider) ObjectEvaluation(
 	}
 
 	internalCtx := convertFlattenedContext(evalCtx)
-	variant, val, ok, matched := flagDef.Evaluate(internalCtx)
-	if !ok {
+	result := flagDef.Evaluate(internalCtx)
+	if !result.OK {
 		return openfeature.InterfaceResolutionDetail{
 			Value: defaultValue,
 			ProviderResolutionDetail: openfeature.ProviderResolutionDetail{
-				Variant:         variant,
+				Variant:         result.Variant,
 				Reason:          openfeature.DefaultReason,
 				ResolutionError: openfeature.NewParseErrorResolutionError("variant not found"),
 			},
@@ -36,14 +36,14 @@ func (p *DuctoProvider) ObjectEvaluation(
 	}
 
 	reason := openfeature.DefaultReason
-	if matched {
+	if result.Matched {
 		reason = openfeature.TargetingMatchReason
 	}
 
 	return openfeature.InterfaceResolutionDetail{
-		Value: val,
+		Value: result.Value,
 		ProviderResolutionDetail: openfeature.ProviderResolutionDetail{
-			Variant: variant,
+			Variant: result.Variant,
 			Reason:  reason,
 		},
 	}

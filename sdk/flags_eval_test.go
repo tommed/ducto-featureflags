@@ -23,28 +23,28 @@ func TestYAMLFlagFile_EvaluatesCorrectly(t *testing.T) {
 	assert.True(t, found)
 
 	// Matching rule
-	variant, val, ok, _ := flag.Evaluate(EvalContext{
+	result := flag.Evaluate(EvalContext{
 		"env": "beta",
 	})
-	assert.Equal(t, "beta", variant)
-	assert.Equal(t, 2, val)
-	assert.True(t, ok, "did not evaluate flag")
+	assert.Equal(t, "beta", result.Variant)
+	assert.Equal(t, 2, result.Value)
+	assert.True(t, result.OK, "did not evaluate flag")
 
 	// Second rule match
-	variant, val, ok, _ = flag.Evaluate(EvalContext{
+	result = flag.Evaluate(EvalContext{
 		"env": "prod",
 	})
-	assert.True(t, ok)
-	assert.Equal(t, "stable", variant)
-	assert.Equal(t, 4, val)
+	assert.True(t, result.OK)
+	assert.Equal(t, "stable", result.Variant)
+	assert.Equal(t, 4, result.Value)
 
 	// No rule match, fallback to enabled
-	variant, val, ok, _ = flag.Evaluate(EvalContext{
+	result = flag.Evaluate(EvalContext{
 		"env": "dev",
 	})
-	assert.True(t, ok)
-	assert.Equal(t, "dev", variant)
-	assert.Equal(t, 0, val)
+	assert.True(t, result.OK)
+	assert.Equal(t, "dev", result.Variant)
+	assert.Equal(t, 0, result.Value)
 
 	// Missing flag
 	_, found = store.Get("not_there")
@@ -56,14 +56,14 @@ func TestFlagEvaluation_StaticOnly(t *testing.T) {
 		Variants:       boolVariants,
 		DefaultVariant: "on",
 	}
-	_, val, ok, _ := f.Evaluate(EvalContext{})
-	assert.True(t, ok)
-	assert.Equal(t, true, val)
+	result := f.Evaluate(EvalContext{})
+	assert.True(t, result.OK)
+	assert.Equal(t, true, result.Value)
 
 	f.DefaultVariant = "off"
-	_, val, ok, _ = f.Evaluate(EvalContext{})
-	assert.True(t, ok)
-	assert.Equal(t, false, val)
+	result = f.Evaluate(EvalContext{})
+	assert.True(t, result.OK)
+	assert.Equal(t, false, result.Value)
 }
 
 func TestFlagEvaluation_WithRules(t *testing.T) {
@@ -76,17 +76,17 @@ func TestFlagEvaluation_WithRules(t *testing.T) {
 		DefaultVariant: "off",
 	}
 
-	_, val, ok, _ := f.Evaluate(EvalContext{"env": "prod"})
-	assert.True(t, ok)
-	assert.Equal(t, true, val)
+	result := f.Evaluate(EvalContext{"env": "prod"})
+	assert.True(t, result.OK)
+	assert.Equal(t, true, result.Value)
 
-	_, val, ok, _ = f.Evaluate(EvalContext{"env": "dev"})
-	assert.True(t, ok)
-	assert.Equal(t, false, val)
+	result = f.Evaluate(EvalContext{"env": "dev"})
+	assert.True(t, result.OK)
+	assert.Equal(t, false, result.Value)
 
-	_, val, ok, _ = f.Evaluate(EvalContext{"env": "staging"})
-	assert.True(t, ok)
-	assert.Equal(t, false, val) // fallback
+	result = f.Evaluate(EvalContext{"env": "staging"})
+	assert.True(t, result.OK)
+	assert.Equal(t, false, result.Value) // fallback
 }
 
 func TestStoreEvaluate(t *testing.T) {
@@ -104,13 +104,13 @@ func TestStoreEvaluate(t *testing.T) {
 	flag, found := store.Get("new_ui")
 	assert.True(t, found)
 
-	_, val, ok, _ := flag.Evaluate(EvalContext{"env": "prod"})
-	assert.True(t, ok)
-	assert.Equal(t, true, val)
+	result := flag.Evaluate(EvalContext{"env": "prod"})
+	assert.True(t, result.OK)
+	assert.Equal(t, true, result.Value)
 
-	_, val, ok, _ = flag.Evaluate(EvalContext{"env": "dev"})
-	assert.True(t, ok)
-	assert.Equal(t, false, val)
+	result = flag.Evaluate(EvalContext{"env": "dev"})
+	assert.True(t, result.OK)
+	assert.Equal(t, false, result.Value)
 
 	_, found = store.Get("missing")
 	assert.False(t, found)
@@ -119,9 +119,9 @@ func TestStoreEvaluate(t *testing.T) {
 func TestFlagEvaluation_FallbackToFalse(t *testing.T) {
 	// No rules, no enabled
 	f := Flag{}
-	_, val, ok, _ := f.Evaluate(EvalContext{"env": "prod"})
-	assert.False(t, ok)
-	assert.Nil(t, val)
+	result := f.Evaluate(EvalContext{"env": "prod"})
+	assert.False(t, result.OK)
+	assert.Nil(t, result.Value)
 
 	// Rules don't match, and no enabled fallback
 	f = Flag{
@@ -131,7 +131,7 @@ func TestFlagEvaluation_FallbackToFalse(t *testing.T) {
 			{If: map[string]string{"env": "qa"}, Variant: "on"},
 		},
 	}
-	_, val, ok, _ = f.Evaluate(EvalContext{"env": "prod"})
-	assert.True(t, ok)
-	assert.Equal(t, false, val)
+	result = f.Evaluate(EvalContext{"env": "prod"})
+	assert.True(t, result.OK)
+	assert.Equal(t, false, result.Value)
 }

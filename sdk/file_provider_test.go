@@ -55,9 +55,9 @@ func TestWatchingStore_ReloadsOnChange(t *testing.T) {
 	flag, ok := store.Get("new_ui")
 	assert.True(t, ok)
 
-	_, val, ok, _ := flag.Evaluate(EvalContext{})
-	assert.True(t, ok)
-	assert.Equal(t, false, val)
+	result := flag.Evaluate(EvalContext{})
+	assert.True(t, result.OK)
+	assert.Equal(t, false, result.Value)
 
 	writeTestFlags(t, file, `{
 		"new_ui": { "variants": `+test.BoolVariantsJSON()+`, "defaultVariant": "yes" }
@@ -68,9 +68,9 @@ func TestWatchingStore_ReloadsOnChange(t *testing.T) {
 	flag, ok = store.Get("new_ui")
 	assert.True(t, ok)
 
-	_, val, ok, _ = flag.Evaluate(EvalContext{})
-	assert.True(t, ok)
-	assert.Equal(t, true, val)
+	result = flag.Evaluate(EvalContext{})
+	assert.True(t, result.OK)
+	assert.Equal(t, true, result.Value)
 }
 
 func TestWatchingStore_HandlesBadFileGracefully(t *testing.T) {
@@ -99,7 +99,7 @@ func TestWatchingStore_HandlesBadFileGracefully(t *testing.T) {
 	flag, ok := store.Get("test")
 	assert.True(t, ok)
 
-	_, val, ok, _ := flag.Evaluate(EvalContext{})
-	assert.True(t, ok)
-	assert.Equal(t, true, val)
+	result := flag.Evaluate(EvalContext{})
+	assert.True(t, result.OK)
+	assert.Equal(t, true, result.Value)
 }

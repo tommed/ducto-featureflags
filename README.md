@@ -23,12 +23,13 @@
 - CLI tools and test harnesses
 
 It supports both static file-based flags and dynamic backends (coming soon), and can be used as:
-- A **Go SDK**
+- A **Go SDK** (directly, or as an [OpenFeature Provider](https://github.com/open-feature/go-sdk/openfeature))
 - A **CLI for testing**
 - A **preprocessor plugin** in the [ducto-orchestrator](https://github.com/tommed/ducto-orchestrator)
 
-Please note that Ducto Feature Flags are **not** compliant with [flagd](https://flagd.dev/) because we support
-nested conditional statements, which _cannot_ be reduced to flagd's simpler conditional system.
+Please note that whilst Ducto Feature Flags is compatible with OpenFeature, 
+it is **not** compliant with [flagd](https://flagd.dev/) because we support nested conditional
+statements, which _cannot_ be reduced to flagd's simpler conditional system.
 Once flagd can support nested conditionals like 'and' and 'or', we will provide support. 
 
 ---
@@ -37,6 +38,7 @@ Once flagd can support nested conditionals like 'and' and 'or', we will provide 
 - 🔍 Evaluate flags at runtime
 - 🧩 Simple JSON/YAML flag format
 - ♻️ Optional hot-reloading (fsnotify)
+- 🤝 OpenFeature compatible
 - 🌐 Future: HTTP / Redis / Consul backends
 - 🔓 MIT licensed and reusable in other OSS projects
 

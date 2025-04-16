@@ -45,7 +45,7 @@ This document defines the **v2 feature flag model** used by `ducto-featureflags`
 ### Flag Fields
 | Field            | Type                     | Description                         |
 |------------------|--------------------------|-------------------------------------|
-| `enabled`        | `bool`                   | Whether the flag is active          |
+| `disabled`       | `bool` (default false)   | Whether the flag is active          |
 | `defaultVariant` | `string`                 | Fallback variant if no rule matches |
 | `variants`       | `map[string]interface{}` | Named, typed variant values         |
 | `rules`          | `[]VariantRule`          | Targeted resolution logic           |
@@ -94,7 +94,6 @@ The value returned from `variants[variant]` must be coercible to the requested t
 
 ```yaml
 new_ui:
-  enabled: true
   defaultVariant: off
   variants:
     on: true
@@ -118,7 +117,6 @@ and even objects like so:
 ```json
 {
   "checkout_config": {
-    "enabled": true,
     "defaultVariant": "standard",
     "variants": {
       "standard": {
@@ -144,10 +142,9 @@ and even objects like so:
 ## 📌 Compatibility with v1
 
 - v1 boolean flags can be upgraded by mapping:
-    - `enabled: true` → `enabled: true`
+    - `enabled` → `defaultVariant`
     - `rules[].value: true|false` → `variant: "on"|"off"`
     - `variants: { on: true, off: false }`
-    - `defaultVariant` = `off`
 
 ---
 ## 🧩 Limitations

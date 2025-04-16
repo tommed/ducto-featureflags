@@ -61,25 +61,39 @@
 				
 				<option value="file2">github.com/tommed/ducto-featureflags/internal/cli/root.go (80.0%)</option>
 				
-				<option value="file3">github.com/tommed/ducto-featureflags/internal/cli/runner.go (100.0%)</option>
+				<option value="file3">github.com/tommed/ducto-featureflags/internal/cli/runner.go (90.0%)</option>
 				
-				<option value="file4">github.com/tommed/ducto-featureflags/internal/cli/serve.go (83.6%)</option>
+				<option value="file4">github.com/tommed/ducto-featureflags/internal/cli/serve.go (85.3%)</option>
 				
-				<option value="file5">github.com/tommed/ducto-featureflags/sdk/file.go (93.3%)</option>
+				<option value="file5">github.com/tommed/ducto-featureflags/openfeature/provider.go (100.0%)</option>
 				
-				<option value="file6">github.com/tommed/ducto-featureflags/sdk/file_provider.go (88.9%)</option>
+				<option value="file6">github.com/tommed/ducto-featureflags/openfeature/provider_context.go (100.0%)</option>
 				
-				<option value="file7">github.com/tommed/ducto-featureflags/sdk/flags.go (84.0%)</option>
+				<option value="file7">github.com/tommed/ducto-featureflags/openfeature/resolve_bool.go (78.6%)</option>
 				
-				<option value="file8">github.com/tommed/ducto-featureflags/sdk/http.go (100.0%)</option>
+				<option value="file8">github.com/tommed/ducto-featureflags/openfeature/resolve_numbers.go (68.6%)</option>
 				
-				<option value="file9">github.com/tommed/ducto-featureflags/sdk/http_provider.go (91.7%)</option>
+				<option value="file9">github.com/tommed/ducto-featureflags/openfeature/resolve_objects.go (81.8%)</option>
 				
-				<option value="file10">github.com/tommed/ducto-featureflags/sdk/store.go (83.3%)</option>
+				<option value="file10">github.com/tommed/ducto-featureflags/openfeature/resolve_string.go (78.6%)</option>
 				
-				<option value="file11">github.com/tommed/ducto-featureflags/sdk/store_dynamic.go (78.3%)</option>
+				<option value="file11">github.com/tommed/ducto-featureflags/sdk/file.go (93.3%)</option>
 				
-				<option value="file12">github.com/tommed/ducto-featureflags/sdk/utils.go (100.0%)</option>
+				<option value="file12">github.com/tommed/ducto-featureflags/sdk/file_provider.go (88.9%)</option>
+				
+				<option value="file13">github.com/tommed/ducto-featureflags/sdk/flags.go (80.6%)</option>
+				
+				<option value="file14">github.com/tommed/ducto-featureflags/sdk/http.go (100.0%)</option>
+				
+				<option value="file15">github.com/tommed/ducto-featureflags/sdk/http_provider.go (91.7%)</option>
+				
+				<option value="file16">github.com/tommed/ducto-featureflags/sdk/store.go (100.0%)</option>
+				
+				<option value="file17">github.com/tommed/ducto-featureflags/sdk/store_dynamic.go (78.3%)</option>
+				
+				<option value="file18">github.com/tommed/ducto-featureflags/sdk/utils.go (100.0%)</option>
+				
+				<option value="file19">github.com/tommed/ducto-featureflags/test/utils.go (71.4%)</option>
 				
 				</select>
 			</div>
@@ -217,8 +231,18 @@ func Run(args []string, stdout, stderr io.Writer) int <span class="cov10" title=
         }</span>
 
         <span class="cov4" title="2">ctx := parseContext(ctxFlags)
-        result := store.IsEnabled(key, ctx)
-        fmt.Fprintf(stdout, "Flag %q is %v\n", key, result)
+        flagFromStore, ok := store.Get(key)
+        if !ok </span><span class="cov0" title="0">{
+                fmt.Fprintf(stderr, "failed to get flag: %v", err)
+                return 1
+        }</span>
+        <span class="cov4" title="2">variant, rawVal, ok, matched := flagFromStore.Evaluate(ctx)
+        if !ok </span><span class="cov0" title="0">{
+                fmt.Fprintf(stderr, "failed to evaluate flag: %v", err)
+                return 1
+        }</span>
+
+        <span class="cov4" title="2">fmt.Fprintf(stdout, "Flag %q is variant %s = %v (matched=%v)\n", key, variant, rawVal, matched)
         return 0</span>
 }
 
@@ -246,6 +270,13 @@ import (
 
         "github.com/tommed/ducto-featureflags/sdk"
 )
+
+type ResolutionResponse struct {
+        Variant string      `json:"variant"`
+        Value   interface{} `json:"value"`
+        Reason  string      `json:"reason"`
+        Error   string      `json:"error,omitempty"`
+}
 
 //goland:noinspection GoUnhandledErrorResult
 func Serve(args []string, stdout, stderr io.Writer) int <span class="cov6" title="4">{
@@ -309,8 +340,27 @@ func Serve(args []string, stdout, stderr io.Writer) int <span class="cov6" title
                                 }
 
                                 // Determine what to send back
-                                <span class="cov6" title="4">result := store.IsEnabled(key, ctx)
-                                encode(w, map[string]bool{"enabled": result})
+                                <span class="cov6" title="4">storeFlag, ok := store.Get(key)
+                                if !ok </span><span class="cov1" title="1">{
+                                        encode(w, ResolutionResponse{
+                                                Variant: "",
+                                                Value:   false,
+                                                Reason:  "ERROR",
+                                                Error:   "flag not found",
+                                        })
+                                        return
+                                }</span>
+
+                                <span class="cov4" title="3">variant, val, _, matched := storeFlag.Evaluate(ctx)
+                                resp := ResolutionResponse{
+                                        Variant: variant,
+                                        Value:   val,
+                                        Reason:  "FALLBACK",
+                                }
+                                if matched </span><span class="cov4" title="3">{
+                                        resp.Reason = "TARGETING_MATCH"
+                                }</span>
+                                <span class="cov4" title="3">encode(w, resp)
                                 return</span>
                         }
 
@@ -354,7 +404,367 @@ func handleYAML(w http.ResponseWriter, graph interface{}) <span class="cov1" tit
 }</span>
 </pre>
 		
-		<pre class="file" id="file5" style="display: none">package sdk
+		<pre class="file" id="file5" style="display: none">package openfeature
+
+import (
+        "github.com/open-feature/go-sdk/openfeature"
+        "github.com/tommed/ducto-featureflags/sdk"
+)
+
+// DuctoProvider implements the OpenFeature Provider interface
+type DuctoProvider struct {
+        Store sdk.AnyStore // your existing flag store (interface)
+}
+
+func NewProvider(store sdk.AnyStore) openfeature.FeatureProvider <span class="cov10" title="8">{
+        return &amp;DuctoProvider{Store: store}
+}</span>
+
+func (p *DuctoProvider) Metadata() openfeature.Metadata <span class="cov7" title="4">{
+        return openfeature.Metadata{Name: "ducto-featureflags"}
+}</span>
+
+func (p *DuctoProvider) Hooks() []openfeature.Hook <span class="cov7" title="4">{
+        return nil
+}</span>
+</pre>
+		
+		<pre class="file" id="file6" style="display: none">package openfeature
+
+import (
+        "github.com/open-feature/go-sdk/openfeature"
+        "github.com/tommed/ducto-featureflags/sdk"
+)
+
+// convertFlattenedContext converts OpenFeature FlattenedContext to internal EvalContext
+func convertFlattenedContext(fc openfeature.FlattenedContext) sdk.EvalContext <span class="cov9" title="8">{
+        result := make(sdk.EvalContext)
+        for k, v := range fc </span><span class="cov10" title="10">{
+                if s, ok := v.(string); ok </span><span class="cov9" title="9">{
+                        result[k] = s
+                }</span>
+        }
+        <span class="cov9" title="8">return result</span>
+}
+</pre>
+		
+		<pre class="file" id="file7" style="display: none">package openfeature
+
+import (
+        "context"
+        "github.com/open-feature/go-sdk/openfeature"
+)
+
+func (p *DuctoProvider) BooleanEvaluation(
+        _ context.Context,
+        flagKey string,
+        defaultValue bool,
+        evalCtx openfeature.FlattenedContext,
+) openfeature.BoolResolutionDetail <span class="cov10" title="2">{
+        flagDef, found := p.Store.Get(flagKey)
+        if !found </span><span class="cov0" title="0">{
+                return openfeature.BoolResolutionDetail{
+                        Value: defaultValue,
+                        ProviderResolutionDetail: openfeature.ProviderResolutionDetail{
+                                Reason:          openfeature.DefaultReason,
+                                ResolutionError: openfeature.NewFlagNotFoundResolutionError(flagKey),
+                        },
+                }
+        }</span>
+
+        <span class="cov10" title="2">internalCtx := convertFlattenedContext(evalCtx)
+        variant, val, ok, matched := flagDef.Evaluate(internalCtx)
+        if !ok </span><span class="cov0" title="0">{
+                return openfeature.BoolResolutionDetail{
+                        Value: defaultValue,
+                        ProviderResolutionDetail: openfeature.ProviderResolutionDetail{
+                                Variant:         variant,
+                                Reason:          openfeature.DefaultReason,
+                                ResolutionError: openfeature.NewParseErrorResolutionError("variant not found"),
+                        },
+                }
+        }</span>
+
+        <span class="cov10" title="2">b, ok := val.(bool)
+        if !ok </span><span class="cov0" title="0">{
+                return openfeature.BoolResolutionDetail{
+                        Value: defaultValue,
+                        ProviderResolutionDetail: openfeature.ProviderResolutionDetail{
+                                Variant:         variant,
+                                Reason:          openfeature.DefaultReason,
+                                ResolutionError: openfeature.NewTypeMismatchResolutionError("bool"),
+                        },
+                }
+        }</span>
+
+        <span class="cov10" title="2">reason := openfeature.DefaultReason
+        if matched </span><span class="cov1" title="1">{
+                reason = openfeature.TargetingMatchReason
+        }</span>
+
+        <span class="cov10" title="2">return openfeature.BoolResolutionDetail{
+                Value: b,
+                ProviderResolutionDetail: openfeature.ProviderResolutionDetail{
+                        Variant: variant,
+                        Reason:  reason,
+                },
+        }</span>
+}
+</pre>
+		
+		<pre class="file" id="file8" style="display: none">package openfeature
+
+import (
+        "context"
+        "github.com/open-feature/go-sdk/openfeature"
+)
+
+func (p *DuctoProvider) IntEvaluation(
+        _ context.Context,
+        flagKey string,
+        defaultValue int64,
+        evalCtx openfeature.FlattenedContext,
+) openfeature.IntResolutionDetail <span class="cov8" title="1">{
+        flagDef, found := p.Store.Get(flagKey)
+        if !found </span><span class="cov0" title="0">{
+                return openfeature.IntResolutionDetail{
+                        Value: defaultValue,
+                        ProviderResolutionDetail: openfeature.ProviderResolutionDetail{
+                                Reason:          openfeature.DefaultReason,
+                                ResolutionError: openfeature.NewFlagNotFoundResolutionError(flagKey),
+                        },
+                }
+        }</span>
+
+        <span class="cov8" title="1">internalCtx := convertFlattenedContext(evalCtx)
+        variant, val, ok, matched := flagDef.Evaluate(internalCtx)
+        if !ok </span><span class="cov0" title="0">{
+                return openfeature.IntResolutionDetail{
+                        Value: defaultValue,
+                        ProviderResolutionDetail: openfeature.ProviderResolutionDetail{
+                                Variant:         variant,
+                                Reason:          openfeature.DefaultReason,
+                                ResolutionError: openfeature.NewParseErrorResolutionError("variant not found"),
+                        },
+                }
+        }</span>
+
+        <span class="cov8" title="1">var n int64
+        switch v := val.(type) </span>{
+        case int:<span class="cov0" title="0">
+                n = int64(v)</span>
+        case int64:<span class="cov0" title="0">
+                n = v</span>
+        case float64:<span class="cov8" title="1">
+                n = int64(v)</span>
+        default:<span class="cov0" title="0">
+                return openfeature.IntResolutionDetail{
+                        Value: defaultValue,
+                        ProviderResolutionDetail: openfeature.ProviderResolutionDetail{
+                                Variant:         variant,
+                                Reason:          openfeature.DefaultReason,
+                                ResolutionError: openfeature.NewTypeMismatchResolutionError("int"),
+                        },
+                }</span>
+        }
+
+        <span class="cov8" title="1">reason := openfeature.DefaultReason
+        if matched </span><span class="cov8" title="1">{
+                reason = openfeature.TargetingMatchReason
+        }</span>
+
+        <span class="cov8" title="1">return openfeature.IntResolutionDetail{
+                Value: n,
+                ProviderResolutionDetail: openfeature.ProviderResolutionDetail{
+                        Variant: variant,
+                        Reason:  reason,
+                },
+        }</span>
+}
+
+func (p *DuctoProvider) FloatEvaluation(
+        _ context.Context,
+        flagKey string,
+        defaultValue float64,
+        evalCtx openfeature.FlattenedContext,
+) openfeature.FloatResolutionDetail <span class="cov8" title="1">{
+        flagDef, found := p.Store.Get(flagKey)
+        if !found </span><span class="cov0" title="0">{
+                return openfeature.FloatResolutionDetail{
+                        Value: defaultValue,
+                        ProviderResolutionDetail: openfeature.ProviderResolutionDetail{
+                                Reason:          openfeature.DefaultReason,
+                                ResolutionError: openfeature.NewFlagNotFoundResolutionError(flagKey),
+                        },
+                }
+        }</span>
+
+        <span class="cov8" title="1">internalCtx := convertFlattenedContext(evalCtx)
+        variant, val, ok, matched := flagDef.Evaluate(internalCtx)
+        if !ok </span><span class="cov0" title="0">{
+                return openfeature.FloatResolutionDetail{
+                        Value: defaultValue,
+                        ProviderResolutionDetail: openfeature.ProviderResolutionDetail{
+                                Variant:         variant,
+                                Reason:          openfeature.DefaultReason,
+                                ResolutionError: openfeature.NewParseErrorResolutionError("variant not found"),
+                        },
+                }
+        }</span>
+
+        <span class="cov8" title="1">var f float64
+        switch v := val.(type) </span>{
+        case float64:<span class="cov8" title="1">
+                f = v</span>
+        case float32:<span class="cov0" title="0">
+                f = float64(v)</span>
+        case int:<span class="cov0" title="0">
+                f = float64(v)</span>
+        case int64:<span class="cov0" title="0">
+                f = float64(v)</span>
+        default:<span class="cov0" title="0">
+                return openfeature.FloatResolutionDetail{
+                        Value: defaultValue,
+                        ProviderResolutionDetail: openfeature.ProviderResolutionDetail{
+                                Variant:         variant,
+                                Reason:          openfeature.DefaultReason,
+                                ResolutionError: openfeature.NewTypeMismatchResolutionError("float"),
+                        },
+                }</span>
+        }
+
+        <span class="cov8" title="1">reason := openfeature.DefaultReason
+        if matched </span><span class="cov8" title="1">{
+                reason = openfeature.TargetingMatchReason
+        }</span>
+
+        <span class="cov8" title="1">return openfeature.FloatResolutionDetail{
+                Value: f,
+                ProviderResolutionDetail: openfeature.ProviderResolutionDetail{
+                        Variant: variant,
+                        Reason:  reason,
+                },
+        }</span>
+}
+</pre>
+		
+		<pre class="file" id="file9" style="display: none">package openfeature
+
+import (
+        "context"
+        "github.com/open-feature/go-sdk/openfeature"
+)
+
+func (p *DuctoProvider) ObjectEvaluation(
+        _ context.Context,
+        flagKey string,
+        defaultValue interface{},
+        evalCtx openfeature.FlattenedContext,
+) openfeature.InterfaceResolutionDetail <span class="cov8" title="1">{
+        flagDef, found := p.Store.Get(flagKey)
+        if !found </span><span class="cov0" title="0">{
+                return openfeature.InterfaceResolutionDetail{
+                        Value: defaultValue,
+                        ProviderResolutionDetail: openfeature.ProviderResolutionDetail{
+                                Reason:          openfeature.DefaultReason,
+                                ResolutionError: openfeature.NewFlagNotFoundResolutionError(flagKey),
+                        },
+                }
+        }</span>
+
+        <span class="cov8" title="1">internalCtx := convertFlattenedContext(evalCtx)
+        variant, val, ok, matched := flagDef.Evaluate(internalCtx)
+        if !ok </span><span class="cov0" title="0">{
+                return openfeature.InterfaceResolutionDetail{
+                        Value: defaultValue,
+                        ProviderResolutionDetail: openfeature.ProviderResolutionDetail{
+                                Variant:         variant,
+                                Reason:          openfeature.DefaultReason,
+                                ResolutionError: openfeature.NewParseErrorResolutionError("variant not found"),
+                        },
+                }
+        }</span>
+
+        <span class="cov8" title="1">reason := openfeature.DefaultReason
+        if matched </span><span class="cov8" title="1">{
+                reason = openfeature.TargetingMatchReason
+        }</span>
+
+        <span class="cov8" title="1">return openfeature.InterfaceResolutionDetail{
+                Value: val,
+                ProviderResolutionDetail: openfeature.ProviderResolutionDetail{
+                        Variant: variant,
+                        Reason:  reason,
+                },
+        }</span>
+}
+</pre>
+		
+		<pre class="file" id="file10" style="display: none">package openfeature
+
+import (
+        "context"
+        "github.com/open-feature/go-sdk/openfeature"
+)
+
+func (p *DuctoProvider) StringEvaluation(
+        _ context.Context,
+        flagKey string,
+        defaultValue string,
+        evalCtx openfeature.FlattenedContext,
+) openfeature.StringResolutionDetail <span class="cov10" title="3">{
+        flagDef, found := p.Store.Get(flagKey)
+        if !found </span><span class="cov0" title="0">{
+                return openfeature.StringResolutionDetail{
+                        Value: defaultValue,
+                        ProviderResolutionDetail: openfeature.ProviderResolutionDetail{
+                                Reason:          openfeature.DefaultReason,
+                                ResolutionError: openfeature.NewFlagNotFoundResolutionError(flagKey),
+                        },
+                }
+        }</span>
+
+        <span class="cov10" title="3">internalCtx := convertFlattenedContext(evalCtx)
+        variant, val, ok, matched := flagDef.Evaluate(internalCtx)
+        if !ok </span><span class="cov0" title="0">{
+                return openfeature.StringResolutionDetail{
+                        Value: defaultValue,
+                        ProviderResolutionDetail: openfeature.ProviderResolutionDetail{
+                                Variant:         variant,
+                                Reason:          openfeature.DefaultReason,
+                                ResolutionError: openfeature.NewParseErrorResolutionError("variant not found"),
+                        },
+                }
+        }</span>
+
+        <span class="cov10" title="3">s, ok := val.(string)
+        if !ok </span><span class="cov0" title="0">{
+                return openfeature.StringResolutionDetail{
+                        Value: defaultValue,
+                        ProviderResolutionDetail: openfeature.ProviderResolutionDetail{
+                                Variant:         variant,
+                                Reason:          openfeature.DefaultReason,
+                                ResolutionError: openfeature.NewTypeMismatchResolutionError("string"),
+                        },
+                }
+        }</span>
+
+        <span class="cov10" title="3">reason := openfeature.DefaultReason
+        if matched </span><span class="cov1" title="1">{
+                reason = openfeature.TargetingMatchReason
+        }</span>
+
+        <span class="cov10" title="3">return openfeature.StringResolutionDetail{
+                Value: s,
+                ProviderResolutionDetail: openfeature.ProviderResolutionDetail{
+                        Variant: variant,
+                        Reason:  reason,
+                },
+        }</span>
+}
+</pre>
+		
+		<pre class="file" id="file11" style="display: none">package sdk
 
 import (
         "encoding/json"
@@ -366,42 +776,42 @@ import (
 )
 
 // NewStoreFromFile loads flags from a JSON file into memory
-func NewStoreFromFile(path string) (*Store, error) <span class="cov8" title="15">{
+func NewStoreFromFile(path string) (*Store, error) <span class="cov7" title="15">{
         data, err := os.ReadFile(path)
         if err != nil </span><span class="cov2" title="2">{
                 return nil, fmt.Errorf("read flag file: %w", err)
         }</span>
-        <span class="cov8" title="13">return NewStoreFromBytesWithFormat(data, DetectFormat(path))</span>
+        <span class="cov7" title="13">return NewStoreFromBytesWithFormat(data, DetectFormat(path))</span>
 }
 
 // NewStoreFromBytesWithFormat allows loading from embedded YAML or JSON or remote fetch
-func NewStoreFromBytesWithFormat(data []byte, format string) (*Store, error) <span class="cov10" title="26">{
+func NewStoreFromBytesWithFormat(data []byte, format string) (*Store, error) <span class="cov10" title="33">{
         var parsed map[string]Flag
         switch format </span>{
         case "yaml":<span class="cov2" title="2">
                 if err := yaml.Unmarshal(data, &amp;parsed); err != nil </span><span class="cov0" title="0">{
                         return nil, fmt.Errorf("parse YAML: %w", err)
                 }</span>
-        default:<span class="cov9" title="24">
+        default:<span class="cov9" title="31">
                 if err := json.Unmarshal(data, &amp;parsed); err != nil </span><span class="cov4" title="4">{
                         return nil, fmt.Errorf("parse JSON: %w", err)
                 }</span>
         }
-        <span class="cov9" title="22">return &amp;Store{flags: parsed}, nil</span>
+        <span class="cov9" title="29">return &amp;Store{flags: parsed}, nil</span>
 }
 
-func DetectFormat(path string) string <span class="cov9" title="22">{
+func DetectFormat(path string) string <span class="cov8" title="22">{
         ext := strings.ToLower(filepath.Ext(path))
         switch ext </span>{
         case ".yaml", ".yml":<span class="cov2" title="2">
                 return "yaml"</span>
-        default:<span class="cov9" title="20">
+        default:<span class="cov8" title="20">
                 return "json"</span>
         }
 }
 </pre>
 		
-		<pre class="file" id="file6" style="display: none">package sdk
+		<pre class="file" id="file12" style="display: none">package sdk
 
 import (
         "context"
@@ -494,49 +904,65 @@ func (f *fileProvider) Watch(ctx context.Context, onChange func(*Store)) <span c
 }
 </pre>
 		
-		<pre class="file" id="file7" style="display: none">package sdk
+		<pre class="file" id="file13" style="display: none">package sdk
 
 // Flag represents a single feature flag definition
 type Flag struct {
-        Enabled *bool  `json:"enabled,omitempty"` // Static fallback/default
-        Rules   []Rule `json:"rules,omitempty"`   // Optional targeting logic
-        // Future: rollout %, conditions, etc.
+        Disabled       bool                   `json:"disabled,omitempty" yaml:"disabled,omitempty"`
+        DefaultVariant string                 `json:"defaultVariant" yaml:"defaultVariant"`
+        Variants       map[string]interface{} `json:"variants" yaml:"variants"`
+        Rules          []VariantRule          `json:"rules,omitempty" yaml:"rules,omitempty"`
 }
 
-type Rule struct {
-        If    map[string]string `json:"if,omitempty" yaml:"if,omitempty"`
-        Value bool              `json:"value"`
-        // Optional targeting
-        Percent  *int   `json:"percent,omitempty" yaml:"percent,omitempty"`     // 0–100
-        Seed     string `json:"seed,omitempty" yaml:"seed,omitempty"`           // key in context
-        SeedHash string `json:"seed_hash,omitempty" yaml:"seed_hash,omitempty"` // e.g. "sha256", "fnv"
+// VariantRule is our v2 rule which is OpenFeature compatible and uses 'variants'
+type VariantRule struct {
+        If       map[string]string `json:"if,omitempty" yaml:"if,omitempty"`
+        Variant  string            `json:"variant" yaml:"variant"` // name of the variant to use
+        Percent  *int              `json:"percent,omitempty" yaml:"percent,omitempty"`
+        Seed     string            `json:"seed,omitempty" yaml:"seed,omitempty"`
+        SeedHash string            `json:"seed_hash,omitempty" yaml:"seed_hash,omitempty"` // optional: "sha256"
 }
 
 type EvalContext map[string]string
 
 // Evaluate performs rule-based or fallback evaluation
-func (f Flag) Evaluate(ctx EvalContext) bool <span class="cov10" title="1032">{
-        // Check rules first
-        for _, rule := range f.Rules </span><span class="cov9" title="1023">{
-                if ruleMatches(rule.If, ctx, rule) </span><span class="cov7" title="116">{
-                        return rule.Value
-                }</span>
+// Evaluate resolves the flag to its chosen variant value
+// File: sdk/flag.go or sdk/eval.go (your call)
+// Flag.Evaluate now returns (variant, value, ok, matched)
+func (f Flag) Evaluate(ctx EvalContext) (string, interface{}, bool, bool) <span class="cov10" title="1042">{
+        for _, rule := range f.Rules </span><span class="cov9" title="1030">{
+                if ruleMatches(rule, ctx) </span><span class="cov7" title="121">{
+                        // resolve variant name and value
+                        if rule.Variant != "" </span><span class="cov7" title="121">{
+                                val, ok := f.Variants[rule.Variant]
+                                if !ok </span><span class="cov0" title="0">{
+                                        return rule.Variant, nil, false, true // matched rule, but invalid variant
+                                }</span>
+                                <span class="cov7" title="121">return rule.Variant, val, true, true</span> // success, from rule
+                        }
+                        // fallback to simple value (no named variant)
+                        <span class="cov0" title="0">return "", rule.Variant, true, true</span>
+                }
         }
-        // Fallback to Enabled
-        <span class="cov9" title="916">if f.Enabled != nil </span><span class="cov9" title="914">{
-                return *f.Enabled
+
+        // fallback to default variant
+        <span class="cov9" title="921">val, ok := f.Variants[f.DefaultVariant]
+        if !ok </span><span class="cov1" title="1">{
+                return f.DefaultVariant, nil, false, false // fallback failed
         }</span>
-        <span class="cov1" title="2">return false</span>
+        <span class="cov9" title="920">return f.DefaultVariant, val, true, false</span> // success, from default
 }
 
-func ruleMatches(conditions map[string]string, ctx EvalContext, rule Rule) bool <span class="cov9" title="1023">{
-        for k, v := range conditions </span><span class="cov4" title="20">{
-                if ctx[k] != v </span><span class="cov3" title="9">{
+func ruleMatches(rule VariantRule, ctx EvalContext) bool <span class="cov9" title="1030">{
+        // Match conditions
+        for k, v := range rule.If </span><span class="cov5" title="27">{
+                if ctx[k] != v </span><span class="cov4" title="11">{
                         return false
                 }</span>
         }
-        // Handle percent rule (optional)
-        <span class="cov9" title="1014">if rule.Percent != nil </span><span class="cov9" title="1003">{
+
+        // Match percent rollout (optional)
+        <span class="cov9" title="1019">if rule.Percent != nil </span><span class="cov9" title="1003">{
                 if *rule.Percent &lt;= 0 </span><span class="cov0" title="0">{
                         return false
                 }</span>
@@ -546,7 +972,7 @@ func ruleMatches(conditions map[string]string, ctx EvalContext, rule Rule) bool 
                 }</span>
                 <span class="cov9" title="1003">seedVal, ok := ctx[seedKey]
                 if !ok </span><span class="cov1" title="1">{
-                        // Fallback: if seed is missing, and we're asking for hostname, try env
+                        // Fallback to hostname if seed is "HOSTNAME"
                         if seedKey == "HOSTNAME" </span><span class="cov1" title="1">{
                                 seedVal = getHostname()
                                 if seedVal == "" </span><span class="cov0" title="0">{
@@ -556,14 +982,16 @@ func ruleMatches(conditions map[string]string, ctx EvalContext, rule Rule) bool 
                                 return false
                         }</span>
                 }
+
                 <span class="cov9" title="1003">percent := hashToPercent(seedVal, rule.SeedHash)
                 return percent &lt; *rule.Percent</span>
         }
-        <span class="cov4" title="11">return true</span>
+
+        <span class="cov4" title="16">return true</span>
 }
 </pre>
 		
-		<pre class="file" id="file8" style="display: none">package sdk
+		<pre class="file" id="file14" style="display: none">package sdk
 
 import "context"
 
@@ -576,7 +1004,7 @@ func NewStoreFromURL(ctx context.Context, url string, token string) (*Store, err
 }</span>
 </pre>
 		
-		<pre class="file" id="file9" style="display: none">package sdk
+		<pre class="file" id="file15" style="display: none">package sdk
 
 import (
         "context"
@@ -672,10 +1100,10 @@ func (p *httpProvider) Watch(ctx context.Context, onChange func(*Store)) <span c
 }
 </pre>
 		
-		<pre class="file" id="file10" style="display: none">package sdk
+		<pre class="file" id="file16" style="display: none">package sdk
 
 type AnyStore interface {
-        IsEnabled(key string, ctx EvalContext) bool
+        Get(key string) (Flag, bool) // For OpenFeature compatibility
         AllFlags() map[string]Flag
 }
 
@@ -684,18 +1112,15 @@ type Store struct {
         flags map[string]Flag
 }
 
-func NewStore(flags map[string]Flag) AnyStore <span class="cov0" title="0">{
+func NewStore(flags map[string]Flag) AnyStore <span class="cov1" title="1">{
         return &amp;Store{flags: flags}
 }</span>
 
-// IsEnabled returns true if the flag is defined and enabled
-func (s *Store) IsEnabled(key string, ctx EvalContext) bool <span class="cov10" title="26">{
-        flag, ok := s.flags[key]
-        if !ok </span><span class="cov4" title="4">{
-                return false
-        }</span>
-        <span class="cov9" title="22">return flag.Evaluate(ctx)</span>
-}
+// Get just returns the Flag now, so doesn't need EvalContext at this stage
+func (s *Store) Get(key string) (Flag, bool) <span class="cov10" title="31">{
+        f, ok := s.flags[key]
+        return f, ok
+}</span>
 
 // AllFlags returns the raw flag map
 func (s *Store) AllFlags() map[string]Flag <span class="cov2" title="2">{
@@ -703,7 +1128,7 @@ func (s *Store) AllFlags() map[string]Flag <span class="cov2" title="2">{
 }</span>
 </pre>
 		
-		<pre class="file" id="file11" style="display: none">package sdk
+		<pre class="file" id="file17" style="display: none">package sdk
 
 import (
         "context"
@@ -763,11 +1188,11 @@ func (d *DynamicStore) Start() error <span class="cov9" title="6">{
         <span class="cov9" title="6">return nil</span>
 }
 
-// IsEnabled evaluates a feature flag for the given context.
-func (d *DynamicStore) IsEnabled(key string, ctx EvalContext) bool <span class="cov10" title="7">{
+// Get retrieves an un-evaluated flag, ready for evaluation.
+func (d *DynamicStore) Get(key string) (Flag, bool) <span class="cov10" title="7">{
         d.mu.RLock()
         defer d.mu.RUnlock()
-        return d.store.IsEnabled(key, ctx)
+        return d.store.Get(key)
 }</span>
 
 // AllFlags returns all current flag definitions.
@@ -778,7 +1203,7 @@ func (d *DynamicStore) AllFlags() map[string]Flag <span class="cov0" title="0">{
 }</span>
 </pre>
 		
-		<pre class="file" id="file12" style="display: none">package sdk
+		<pre class="file" id="file18" style="display: none">package sdk
 
 import (
         "crypto/sha256"
@@ -811,6 +1236,36 @@ func hashToPercent(value, algo string) int <span class="cov10" title="1003">{
                 h := fnv.New32a()
                 _, _ = h.Write([]byte(value))
                 return int(h.Sum32() % 100)</span>
+        }
+}
+</pre>
+		
+		<pre class="file" id="file19" style="display: none">package test
+
+import (
+        "encoding/json"
+        "gopkg.in/yaml.v3"
+)
+
+func BoolVariants() map[string]interface{} <span class="cov10" title="15">{
+        return map[string]interface{}{
+                "yes": true,
+                "no":  false,
+        }
+}</span>
+
+func BoolVariantsJSON() string <span class="cov9" title="14">{
+        return Encode(BoolVariants(), "json")
+}</span>
+
+func Encode(input any, format string) string <span class="cov10" title="15">{
+        switch format </span>{
+        case "yaml":<span class="cov0" title="0">
+                data, _ := yaml.Marshal(input)
+                return string(data)</span>
+        default:<span class="cov10" title="15">
+                data, _ := json.Marshal(input)
+                return string(data)</span>
         }
 }
 </pre>

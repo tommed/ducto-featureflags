@@ -1,6 +1,0 @@
-# same as 01-simplest.json, but written in yaml
-new_ui:
-  enabled: true
-
-beta_mode:
-  enabled: false
